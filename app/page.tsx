@@ -106,6 +106,8 @@ export default function Home() {
   const activePointersRef = useRef<Map<number, Point>>(new Map());
   const transformRef = useRef({ zoom: 1, pan: { x: 0, y: 0 } });
   const levelChoiceUnlockAtRef = useRef(0);
+  const lastPointerTypeRef = useRef<string | null>(null);
+  const suppressMouseCityClickRef = useRef(false);
   const gestureRef = useRef<{
     primaryId: number;
     origin: Point;
@@ -306,8 +308,15 @@ export default function Home() {
     if (event.pointerType === "mouse" && event.button !== 0) return;
     const target = event.target as Element;
     if (target.closest("button, aside")) return;
+    lastPointerTypeRef.current = event.pointerType;
+    if (event.pointerType === "mouse") suppressMouseCityClickRef.current = false;
     setHoveredCity(null);
-    event.currentTarget.setPointerCapture(event.pointerId);
+    const captureTarget = event.pointerType === "mouse"
+      && target instanceof SVGElement
+      && target.dataset.city
+      ? target
+      : event.currentTarget;
+    captureTarget.setPointerCapture(event.pointerId);
     const point = { x: event.clientX, y: event.clientY };
     activePointersRef.current.set(event.pointerId, point);
     const transform = transformRef.current;
@@ -425,6 +434,7 @@ export default function Home() {
     }
 
     if (activePointersRef.current.size === 0) {
+      suppressMouseCityClickRef.current = event.pointerType === "mouse" && Boolean(gesture?.moved);
       if (gesture && !gesture.moved && gesture.city) {
         // Mobile browsers may dispatch a synthetic click after pointerup. If the
         // newly opened menu is under the finger, that click must not choose a level.
@@ -627,6 +637,15 @@ export default function Home() {
                     onPointerEnter={(event) => updateHoverTooltip(city, event)}
                     onPointerMove={(event) => updateHoverTooltip(city, event)}
                     onPointerLeave={() => setHoveredCity((current) => current === city ? null : current)}
+                    onClick={() => {
+                      if (lastPointerTypeRef.current !== "mouse") return;
+                      if (suppressMouseCityClickRef.current) {
+                        suppressMouseCityClickRef.current = false;
+                        return;
+                      }
+                      levelChoiceUnlockAtRef.current = performance.now() + LEVEL_CLICK_GUARD_MS;
+                      setSelectedCity(city);
+                    }}
                     onKeyDown={(event) => {
                       if (event.key === "Enter" || event.key === " ") {
                         event.preventDefault();
