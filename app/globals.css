@@ -326,6 +326,18 @@ button {
   animation: city-pulse 1.2s ease-in-out infinite alternate;
 }
 
+.city-label {
+  fill: #252923;
+  stroke: rgba(255, 253, 248, 0.94);
+  paint-order: stroke;
+  stroke-linejoin: round;
+  font-family: var(--font-noto-sans-sc), sans-serif;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  pointer-events: none;
+  user-select: none;
+}
+
 @keyframes city-pulse {
   to { filter: brightness(1.12) drop-shadow(0 0 9px rgba(197,64,52,0.72)); }
 }
@@ -341,6 +353,46 @@ button {
   border-radius: 16px;
   background: rgba(255, 253, 248, 0.94);
   box-shadow: 0 10px 32px rgba(56, 49, 36, 0.14);
+}
+
+.label-toggle {
+  position: absolute;
+  z-index: 20;
+  right: 78px;
+  bottom: 24px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 13px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 253, 248, 0.94);
+  color: var(--muted);
+  box-shadow: 0 10px 32px rgba(56, 49, 36, 0.12);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.label-toggle span {
+  display: grid;
+  place-items: center;
+  min-width: 23px;
+  height: 23px;
+  border-radius: 8px;
+  background: #e9e5dc;
+  font-size: 10px;
+}
+
+.label-toggle.active {
+  border-color: rgba(197, 64, 52, 0.36);
+  color: var(--ink);
+}
+
+.label-toggle.active span {
+  background: var(--red);
+  color: white;
 }
 
 .zoom-controls button {
@@ -752,6 +804,11 @@ button {
 
   .zoom-controls {
     right: 12px;
+    bottom: 14px;
+  }
+
+  .label-toggle {
+    right: 68px;
     bottom: 14px;
   }
 

@@ -6,6 +6,7 @@ import { chinaMap } from "../lib/china-map-data";
 type VisitLevel = 0 | 1 | 2 | 3 | 4 | 5;
 type VisitState = Record<string, VisitLevel>;
 type Point = { x: number; y: number };
+type CityLabelMetric = Point & { width: number; height: number };
 
 const VIEWBOX = { width: 800, height: 650 };
 const POPOVER_WIDTH = 264;
@@ -80,6 +81,9 @@ export default function Home() {
   const [popover, setPopover] = useState<Point>({ x: 16, y: 16 });
   const [isExporting, setIsExporting] = useState(false);
   const [storageReady, setStorageReady] = useState(false);
+  const [showLabels, setShowLabels] = useState(true);
+  const [labelMetrics, setLabelMetrics] = useState<Record<string, CityLabelMetric>>({});
+  const [mapUnitScale, setMapUnitScale] = useState(1);
 
   const stageRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -118,6 +122,35 @@ export default function Home() {
     }
   }, [storageReady, visits]);
 
+  useEffect(() => {
+    const measureMap = () => {
+      if (!svgRef.current) return;
+      const nextMetrics: Record<string, CityLabelMetric> = {};
+      for (const city of cityNames) {
+        const path = pathRefs.current[city];
+        if (!path) continue;
+        const bounds = path.getBBox();
+        nextMetrics[city] = {
+          x: bounds.x + bounds.width / 2 + chinaMap[city].offset.x,
+          y: bounds.y + bounds.height / 2 + chinaMap[city].offset.y,
+          width: bounds.width,
+          height: bounds.height,
+        };
+      }
+      const rect = svgRef.current.getBoundingClientRect();
+      setLabelMetrics(nextMetrics);
+      setMapUnitScale(Math.min(rect.width / VIEWBOX.width, rect.height / VIEWBOX.height));
+    };
+
+    const frame = requestAnimationFrame(measureMap);
+    const observer = new ResizeObserver(measureMap);
+    if (svgRef.current) observer.observe(svgRef.current);
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+  }, [cityNames]);
+
   const score = useMemo(
     () => Object.values(visits).reduce<number>((sum, level) => sum + level, 0),
     [visits],
@@ -126,6 +159,17 @@ export default function Home() {
     () => Object.values(visits).filter((level) => level > 0).length,
     [visits],
   );
+
+  const visibleLabels = useMemo(() => {
+    if (!showLabels) return [];
+    const screenScale = mapUnitScale * zoom;
+    return cityNames.filter((city) => {
+      const metric = labelMetrics[city];
+      if (!metric) return false;
+      const requiredWidth = Math.max(34, city.length * 11 + 10);
+      return metric.width * screenScale >= requiredWidth && metric.height * screenScale >= 17;
+    });
+  }, [cityNames, labelMetrics, mapUnitScale, showLabels, zoom]);
 
   const suggestions = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -366,13 +410,27 @@ export default function Home() {
           return `<path d="${escapeXml(chinaMap[city].path)}" fill="${colorByLevel[level]}" stroke="#fffdf8" stroke-width="0.7" stroke-linejoin="round"/>`;
         })
         .join("");
+      const exportLabels = showLabels
+        ? cityNames
+          .filter((city) => {
+            const metric = labelMetrics[city];
+            if (!metric) return false;
+            const requiredWidth = Math.max(40, city.length * 14 + 12);
+            return metric.width * mapScale >= requiredWidth && metric.height * mapScale >= 20;
+          })
+          .map((city) => {
+            const metric = labelMetrics[city];
+            return `<text x="${metric.x}" y="${metric.y}" text-anchor="middle" dominant-baseline="central" font-family="Arial,'Noto Sans SC',sans-serif" font-size="11" font-weight="700" fill="#242824" stroke="#fffdf8" stroke-width="2.6" paint-order="stroke">${escapeXml(city)}</text>`;
+          })
+          .join("")
+        : "";
       const legend = levels
         .map((level, index) => {
           const y = 376 + index * 92;
           return `<rect x="1300" y="${y}" width="46" height="46" rx="10" fill="${level.color}"/><text x="1370" y="${y + 20}" font-size="25" font-weight="700" fill="#252824">${level.label}</text><text x="1370" y="${y + 48}" font-size="18" fill="#74766f">${level.english} · ${level.value}分</text>`;
         })
         .join("");
-      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><rect width="1800" height="1160" fill="#f4f0e7"/><text x="92" y="90" font-family="Arial,'Noto Sans SC',sans-serif" font-size="46" font-weight="800" fill="#20241f">我的中国足迹</text><text x="1300" y="110" font-family="Arial,'Noto Sans SC',sans-serif" font-size="24" fill="#74766f">VISITED CHINA</text><g transform="translate(70 168) scale(${mapScale})">${mapPaths}</g><rect x="1258" y="168" width="470" height="824" rx="36" fill="#fffdf8" stroke="#dcd8cd" stroke-width="2"/><text x="1300" y="250" font-family="Arial,'Noto Sans SC',sans-serif" font-size="26" fill="#74766f">足迹总分</text><text x="1300" y="326" font-family="Arial,'Noto Sans SC',sans-serif" font-size="70" font-weight="800" fill="#c54034">${score}</text><text x="1470" y="320" font-family="Arial,'Noto Sans SC',sans-serif" font-size="24" fill="#74766f">${visitedCount} 座城市</text>${legend}<text x="92" y="1090" font-family="Arial,'Noto Sans SC',sans-serif" font-size="20" fill="#8d8e88">生成于 Visited China · 完整地图视图</text></svg>`;
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><rect width="1800" height="1160" fill="#f4f0e7"/><text x="92" y="90" font-family="Arial,'Noto Sans SC',sans-serif" font-size="46" font-weight="800" fill="#20241f">我的中国足迹</text><text x="1300" y="110" font-family="Arial,'Noto Sans SC',sans-serif" font-size="24" fill="#74766f">VISITED CHINA</text><g transform="translate(70 168) scale(${mapScale})">${mapPaths}${exportLabels}</g><rect x="1258" y="168" width="470" height="824" rx="36" fill="#fffdf8" stroke="#dcd8cd" stroke-width="2"/><text x="1300" y="250" font-family="Arial,'Noto Sans SC',sans-serif" font-size="26" fill="#74766f">足迹总分</text><text x="1300" y="326" font-family="Arial,'Noto Sans SC',sans-serif" font-size="70" font-weight="800" fill="#c54034">${score}</text><text x="1470" y="320" font-family="Arial,'Noto Sans SC',sans-serif" font-size="24" fill="#74766f">${visitedCount} 座城市</text>${legend}<text x="92" y="1090" font-family="Arial,'Noto Sans SC',sans-serif" font-size="20" fill="#8d8e88">生成于 Visited China · 完整地图视图</text></svg>`;
       const blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
       const url = URL.createObjectURL(blob);
       const image = new Image();
@@ -506,8 +564,34 @@ export default function Home() {
                   />
                 );
               })}
+              {visibleLabels.map((city) => {
+                const metric = labelMetrics[city];
+                return (
+                  <text
+                    key={`label-${city}`}
+                    className="city-label"
+                    x={metric.x}
+                    y={metric.y}
+                    fontSize={10.5 / Math.max(mapUnitScale * zoom, 0.01)}
+                    strokeWidth={2.7 / Math.max(mapUnitScale * zoom, 0.01)}
+                    textAnchor="middle"
+                    dominantBaseline="central"
+                    aria-hidden="true"
+                  >
+                    {city}
+                  </text>
+                );
+              })}
             </g>
           </svg>
+
+          <button
+            className={`label-toggle${showLabels ? " active" : ""}`}
+            onClick={() => setShowLabels((current) => !current)}
+            aria-pressed={showLabels}
+          >
+            城市名 <span>{showLabels ? "开" : "关"}</span>
+          </button>
 
           <div className="zoom-controls" aria-label="Map zoom controls">
             <button onClick={() => zoomAt(zoom * 1.3)} aria-label="Zoom in">+</button>
