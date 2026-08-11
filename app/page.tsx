@@ -79,6 +79,7 @@ export default function Home() {
   const [pan, setPan] = useState<Point>({ x: 0, y: 0 });
   const [popover, setPopover] = useState<Point>({ x: 16, y: 16 });
   const [isExporting, setIsExporting] = useState(false);
+  const [storageReady, setStorageReady] = useState(false);
 
   const stageRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -96,16 +97,19 @@ export default function Home() {
       if (stored) setVisits(JSON.parse(stored) as VisitState);
     } catch {
       // A private browser session may block storage; the map still works.
+    } finally {
+      setStorageReady(true);
     }
   }, []);
 
   useEffect(() => {
+    if (!storageReady) return;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(visits));
     } catch {
       // Keep the current in-memory state if storage is unavailable.
     }
-  }, [visits]);
+  }, [storageReady, visits]);
 
   const score = useMemo(
     () => Object.values(visits).reduce<number>((sum, level) => sum + level, 0),
