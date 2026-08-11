@@ -16,6 +16,8 @@ const TOUCH_MAX_ZOOM = 18;
 const LEVEL_CLICK_GUARD_MS = 400;
 const MOUSE_DRAG_THRESHOLD_PX = 6;
 const TOUCH_DRAG_THRESHOLD_PX = 10;
+const EXPORT_SITE_ADDRESS = process.env.NEXT_PUBLIC_EXPORT_SITE_ADDRESS
+  || "visited-china.foye3.chatgpt.site";
 
 function maxZoomForCurrentDevice() {
   if (typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches) {
@@ -507,7 +509,7 @@ export default function Home() {
           return `<rect x="1300" y="${y}" width="46" height="46" rx="10" fill="${level.color}"/><text x="1370" y="${y + 20}" font-size="25" font-weight="700" fill="#252824">${level.label}</text><text x="1370" y="${y + 48}" font-size="18" fill="#74766f">${level.english} · ${level.value}分</text>`;
         })
         .join("");
-      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><rect width="1800" height="1160" fill="#f4f0e7"/><text x="92" y="90" font-family="Arial,'Noto Sans SC',sans-serif" font-size="46" font-weight="800" fill="#20241f">我的中国足迹</text><text x="1300" y="110" font-family="Arial,'Noto Sans SC',sans-serif" font-size="24" fill="#74766f">VISITED CHINA</text><g transform="translate(70 168) scale(${mapScale})">${mapPaths}${exportLabels}</g><rect x="1258" y="168" width="470" height="824" rx="36" fill="#fffdf8" stroke="#dcd8cd" stroke-width="2"/><text x="1300" y="250" font-family="Arial,'Noto Sans SC',sans-serif" font-size="26" fill="#74766f">足迹总分</text><text x="1300" y="326" font-family="Arial,'Noto Sans SC',sans-serif" font-size="70" font-weight="800" fill="#c54034">${score}</text><text x="1470" y="320" font-family="Arial,'Noto Sans SC',sans-serif" font-size="24" fill="#74766f">${visitedCount} 座城市</text>${legend}<text x="92" y="1090" font-family="Arial,'Noto Sans SC',sans-serif" font-size="20" fill="#8d8e88">visited-china.foye3.chatgpt.site</text></svg>`;
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><rect width="1800" height="1160" fill="#f4f0e7"/><text x="92" y="90" font-family="Arial,'Noto Sans SC',sans-serif" font-size="46" font-weight="800" fill="#20241f">我的中国足迹</text><text x="1300" y="110" font-family="Arial,'Noto Sans SC',sans-serif" font-size="24" fill="#74766f">VISITED CHINA</text><g transform="translate(70 168) scale(${mapScale})">${mapPaths}${exportLabels}</g><rect x="1258" y="168" width="470" height="824" rx="36" fill="#fffdf8" stroke="#dcd8cd" stroke-width="2"/><text x="1300" y="250" font-family="Arial,'Noto Sans SC',sans-serif" font-size="26" fill="#74766f">足迹总分</text><text x="1300" y="326" font-family="Arial,'Noto Sans SC',sans-serif" font-size="70" font-weight="800" fill="#c54034">${score}</text><text x="1470" y="320" font-family="Arial,'Noto Sans SC',sans-serif" font-size="24" fill="#74766f">${visitedCount} 座城市</text>${legend}<text x="92" y="1090" font-family="Arial,'Noto Sans SC',sans-serif" font-size="20" fill="#8d8e88">${escapeXml(EXPORT_SITE_ADDRESS)}</text></svg>`;
       const blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
       const url = URL.createObjectURL(blob);
       const image = new Image();
