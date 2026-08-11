@@ -83,11 +83,17 @@ export default function Home() {
 
   const stageRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const pathRefs = useRef<Record<string, SVGPathElement | null>>({});
-  const pointerRef = useRef<{
-    id: number;
+  const activePointersRef = useRef<Map<number, Point>>(new Map());
+  const transformRef = useRef({ zoom: 1, pan: { x: 0, y: 0 } });
+  const gestureRef = useRef<{
+    primaryId: number;
     origin: Point;
-    pan: Point;
+    startPan: Point;
+    startZoom: number;
+    startDistance: number;
+    startCenter: Point;
     moved: boolean;
     city: string | null;
   } | null>(null);
@@ -163,21 +169,24 @@ export default function Home() {
     };
   }, [pan, selectedCity, updatePopover, zoom]);
 
-  const zoomAt = useCallback((nextZoom: number, focus = { x: 400, y: 325 }) => {
-    setZoom((currentZoom) => {
-      const clamped = Math.max(1, Math.min(5, nextZoom));
-      setPan((currentPan) => ({
-        x: focus.x - ((focus.x - currentPan.x) / currentZoom) * clamped,
-        y: focus.y - ((focus.y - currentPan.y) / currentZoom) * clamped,
-      }));
-      return clamped;
-    });
+  const applyTransform = useCallback((nextZoom: number, nextPan: Point) => {
+    transformRef.current = { zoom: nextZoom, pan: nextPan };
+    setZoom(nextZoom);
+    setPan(nextPan);
   }, []);
 
+  const zoomAt = useCallback((nextZoom: number, focus = { x: 400, y: 325 }) => {
+    const current = transformRef.current;
+    const clamped = Math.max(1, Math.min(5, nextZoom));
+    applyTransform(clamped, {
+      x: focus.x - ((focus.x - current.pan.x) / current.zoom) * clamped,
+      y: focus.y - ((focus.y - current.pan.y) / current.zoom) * clamped,
+    });
+  }, [applyTransform]);
+
   const resetView = useCallback(() => {
-    setZoom(1);
-    setPan({ x: 0, y: 0 });
-  }, []);
+    applyTransform(1, { x: 0, y: 0 });
+  }, [applyTransform]);
 
   const focusCity = useCallback((city: string) => {
     const path = pathRefs.current[city];
@@ -189,14 +198,13 @@ export default function Home() {
       y: bounds.y + bounds.height / 2,
     };
     setSelectedCity(city);
-    setZoom(nextZoom);
-    setPan({
+    applyTransform(nextZoom, {
       x: VIEWBOX.width / 2 - center.x * nextZoom,
       y: VIEWBOX.height / 2 - center.y * nextZoom,
     });
     setSearch(city);
     setSearchOpen(false);
-  }, []);
+  }, [applyTransform]);
 
   const chooseLevel = (level: VisitLevel) => {
     if (!selectedCity) return;
@@ -213,43 +221,137 @@ export default function Home() {
       y: ((event.clientY - rect.top) / rect.height) * VIEWBOX.height,
     };
     const factor = event.deltaY > 0 ? 0.86 : 1.16;
-    zoomAt(zoom * factor, focus);
+    zoomAt(transformRef.current.zoom * factor, focus);
   };
 
   const handlePointerDown = (event: React.PointerEvent<SVGSVGElement>) => {
-    if (event.button !== 0) return;
+    if (event.pointerType === "mouse" && event.button !== 0) return;
     event.currentTarget.setPointerCapture(event.pointerId);
+    const point = { x: event.clientX, y: event.clientY };
+    activePointersRef.current.set(event.pointerId, point);
     const target = event.target as SVGElement;
-    pointerRef.current = {
-      id: event.pointerId,
-      origin: { x: event.clientX, y: event.clientY },
-      pan,
-      moved: false,
-      city: target.dataset.city ?? null,
-    };
+    const transform = transformRef.current;
+
+    if (activePointersRef.current.size === 1) {
+      gestureRef.current = {
+        primaryId: event.pointerId,
+        origin: point,
+        startPan: transform.pan,
+        startZoom: transform.zoom,
+        startDistance: 0,
+        startCenter: { x: 0, y: 0 },
+        moved: false,
+        city: target.dataset.city ?? null,
+      };
+      return;
+    }
+
+    if (activePointersRef.current.size === 2 && svgRef.current) {
+      const [first, second] = Array.from(activePointersRef.current.values());
+      const rect = svgRef.current.getBoundingClientRect();
+      const centerClient = {
+        x: (first.x + second.x) / 2,
+        y: (first.y + second.y) / 2,
+      };
+      gestureRef.current = {
+        primaryId: event.pointerId,
+        origin: point,
+        startPan: transform.pan,
+        startZoom: transform.zoom,
+        startDistance: Math.hypot(second.x - first.x, second.y - first.y),
+        startCenter: {
+          x: ((centerClient.x - rect.left) / rect.width) * VIEWBOX.width,
+          y: ((centerClient.y - rect.top) / rect.height) * VIEWBOX.height,
+        },
+        moved: true,
+        city: null,
+      };
+      setSelectedCity(null);
+    }
   };
 
   const handlePointerMove = (event: React.PointerEvent<SVGSVGElement>) => {
-    const pointer = pointerRef.current;
-    if (!pointer || pointer.id !== event.pointerId || !svgRef.current) return;
+    const gesture = gestureRef.current;
+    if (!gesture || !activePointersRef.current.has(event.pointerId) || !svgRef.current) return;
+    activePointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
     const rect = svgRef.current.getBoundingClientRect();
-    const dx = ((event.clientX - pointer.origin.x) / rect.width) * VIEWBOX.width;
-    const dy = ((event.clientY - pointer.origin.y) / rect.height) * VIEWBOX.height;
-    if (Math.abs(dx) + Math.abs(dy) > 3) pointer.moved = true;
-    setPan({ x: pointer.pan.x + dx, y: pointer.pan.y + dy });
+
+    if (activePointersRef.current.size >= 2) {
+      const [first, second] = Array.from(activePointersRef.current.values());
+      const distance = Math.hypot(second.x - first.x, second.y - first.y);
+      if (!gesture.startDistance) return;
+      const nextZoom = Math.max(1, Math.min(5, gesture.startZoom * distance / gesture.startDistance));
+      const centerClient = {
+        x: (first.x + second.x) / 2,
+        y: (first.y + second.y) / 2,
+      };
+      const currentCenter = {
+        x: ((centerClient.x - rect.left) / rect.width) * VIEWBOX.width,
+        y: ((centerClient.y - rect.top) / rect.height) * VIEWBOX.height,
+      };
+      const mapPoint = {
+        x: (gesture.startCenter.x - gesture.startPan.x) / gesture.startZoom,
+        y: (gesture.startCenter.y - gesture.startPan.y) / gesture.startZoom,
+      };
+      gesture.moved = true;
+      applyTransform(nextZoom, {
+        x: currentCenter.x - mapPoint.x * nextZoom,
+        y: currentCenter.y - mapPoint.y * nextZoom,
+      });
+      return;
+    }
+
+    if (gesture.primaryId !== event.pointerId) return;
+    const dx = ((event.clientX - gesture.origin.x) / rect.width) * VIEWBOX.width;
+    const dy = ((event.clientY - gesture.origin.y) / rect.height) * VIEWBOX.height;
+    if (Math.abs(dx) + Math.abs(dy) > 3) gesture.moved = true;
+    applyTransform(gesture.startZoom, {
+      x: gesture.startPan.x + dx,
+      y: gesture.startPan.y + dy,
+    });
   };
 
   const handlePointerUp = (event: React.PointerEvent<SVGSVGElement>) => {
-    const pointer = pointerRef.current;
-    if (pointer?.id === event.pointerId) {
-      if (!pointer.moved && pointer.city) setSelectedCity(pointer.city);
+    const gesture = gestureRef.current;
+    activePointersRef.current.delete(event.pointerId);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
-      pointerRef.current = null;
+    }
+
+    if (activePointersRef.current.size === 0) {
+      if (gesture && !gesture.moved && gesture.city) setSelectedCity(gesture.city);
+      gestureRef.current = null;
+      return;
+    }
+
+    if (activePointersRef.current.size === 1) {
+      const [remainingId, remainingPoint] = Array.from(activePointersRef.current.entries())[0];
+      const transform = transformRef.current;
+      gestureRef.current = {
+        primaryId: remainingId,
+        origin: remainingPoint,
+        startPan: transform.pan,
+        startZoom: transform.zoom,
+        startDistance: 0,
+        startCenter: { x: 0, y: 0 },
+        moved: true,
+        city: null,
+      };
     }
   };
 
   const handlePointerCancel = (event: React.PointerEvent<SVGSVGElement>) => {
-    if (pointerRef.current?.id === event.pointerId) pointerRef.current = null;
+    activePointersRef.current.delete(event.pointerId);
+    if (activePointersRef.current.size === 0) gestureRef.current = null;
+  };
+
+  const clearAllMarks = () => {
+    if (Object.keys(visits).length === 0) return;
+    if (!window.confirm("确定清除所有城市标记吗？此操作无法撤销。")) return;
+    setVisits({});
+    setSelectedCity(null);
+    setSearch("");
+    resetView();
   };
 
   const exportMap = async () => {
@@ -313,6 +415,7 @@ export default function Home() {
         <div className="search-wrap">
           <SearchIcon />
           <input
+            ref={searchInputRef}
             value={search}
             onChange={(event) => {
               setSearch(event.target.value);
@@ -354,6 +457,7 @@ export default function Home() {
         <div
           className="map-stage"
           ref={stageRef}
+          onPointerDown={() => searchInputRef.current?.blur()}
           onClick={(event) => {
             if (event.currentTarget === event.target) setSelectedCity(null);
           }}
@@ -361,7 +465,7 @@ export default function Home() {
           <div className="map-caption">
             <span className="eyebrow">点击一座城市开始</span>
             <h1>你在中国，留下了多少足迹？</h1>
-            <p>点选城市标记足迹等级，滚轮或按钮可缩放，拖动地图探索。</p>
+            <p>点选城市标记足迹等级，拖动地图或双指缩放探索。</p>
           </div>
 
           <svg
@@ -459,6 +563,13 @@ export default function Home() {
             <div className="score-track">
               <span style={{ width: `${Math.min(100, (visitedCount / cityNames.length) * 100)}%` }} />
             </div>
+            <button
+              className="clear-all-button"
+              onClick={clearAllMarks}
+              disabled={Object.keys(visits).length === 0}
+            >
+              清除全部标记
+            </button>
           </section>
 
           <section className="legend-card">
