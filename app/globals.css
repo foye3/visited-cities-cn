@@ -524,11 +524,22 @@ button {
   background: transparent;
   cursor: pointer;
   text-align: left;
+  -webkit-tap-highlight-color: transparent;
 }
 
-.level-options button:hover,
 .level-options button.active {
-  background: #efebe3;
+  background: rgba(197, 64, 52, 0.09);
+  box-shadow: inset 0 0 0 1px rgba(197, 64, 52, 0.22);
+}
+
+.level-options button.active .level-copy strong {
+  color: var(--red);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .level-options button:hover:not(.active) {
+    background: #f3efe7;
+  }
 }
 
 .level-dot {
