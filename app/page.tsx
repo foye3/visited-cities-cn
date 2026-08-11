@@ -297,15 +297,16 @@ export default function Home() {
     zoomAt(transformRef.current.zoom * factor, focus);
   };
 
-  const handlePointerDown = (event: React.PointerEvent<SVGSVGElement>) => {
+  const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     if (event.pointerType === "mouse" && event.button !== 0) return;
+    const target = event.target as Element;
+    if (target.closest("button, aside")) return;
     setHoveredCity(null);
     event.currentTarget.setPointerCapture(event.pointerId);
     const point = { x: event.clientX, y: event.clientY };
     activePointersRef.current.set(event.pointerId, point);
-    const target = event.target as SVGElement;
     const transform = transformRef.current;
-    let city = target.dataset.city ?? null;
+    let city = (target as HTMLElement | SVGElement).dataset.city ?? null;
     if (!city && event.pointerType !== "mouse") {
       let nearestDistance = 22;
       let nearestCenterDistance = Number.POSITIVE_INFINITY;
@@ -365,7 +366,7 @@ export default function Home() {
     }
   };
 
-  const handlePointerMove = (event: React.PointerEvent<SVGSVGElement>) => {
+  const handlePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
     const gesture = gestureRef.current;
     if (!gesture || !activePointersRef.current.has(event.pointerId) || !svgRef.current) return;
     activePointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
@@ -406,7 +407,7 @@ export default function Home() {
     });
   };
 
-  const handlePointerUp = (event: React.PointerEvent<SVGSVGElement>) => {
+  const handlePointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
     const gesture = gestureRef.current;
     activePointersRef.current.delete(event.pointerId);
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
@@ -435,7 +436,7 @@ export default function Home() {
     }
   };
 
-  const handlePointerCancel = (event: React.PointerEvent<SVGSVGElement>) => {
+  const handlePointerCancel = (event: React.PointerEvent<HTMLDivElement>) => {
     activePointersRef.current.delete(event.pointerId);
     if (activePointersRef.current.size === 0) gestureRef.current = null;
   };
@@ -566,7 +567,13 @@ export default function Home() {
         <div
           className="map-stage"
           ref={stageRef}
-          onPointerDown={() => searchInputRef.current?.blur()}
+          onPointerDown={(event) => {
+            searchInputRef.current?.blur();
+            handlePointerDown(event);
+          }}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerCancel}
           onClick={(event) => {
             if (event.currentTarget === event.target) setSelectedCity(null);
           }}
@@ -584,10 +591,6 @@ export default function Home() {
             role="img"
             aria-label="Interactive map of cities in China"
             onWheel={handleWheel}
-            onPointerDown={handlePointerDown}
-            onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerUp}
-            onPointerCancel={handlePointerCancel}
           >
             <g transform={`translate(${pan.x} ${pan.y}) scale(${zoom})`}>
               {cityNames.map((city) => {
