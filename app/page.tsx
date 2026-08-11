@@ -14,6 +14,8 @@ const STORAGE_KEY = "visited-china-levels-v1";
 const DESKTOP_MAX_ZOOM = 6;
 const TOUCH_MAX_ZOOM = 18;
 const LEVEL_CLICK_GUARD_MS = 400;
+const MOUSE_DRAG_THRESHOLD_PX = 6;
+const TOUCH_DRAG_THRESHOLD_PX = 10;
 
 function maxZoomForCurrentDevice() {
   if (typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches) {
@@ -401,9 +403,14 @@ export default function Home() {
     }
 
     if (gesture.primaryId !== event.pointerId) return;
-    const dx = ((event.clientX - gesture.origin.x) / rect.width) * VIEWBOX.width;
-    const dy = ((event.clientY - gesture.origin.y) / rect.height) * VIEWBOX.height;
-    if (Math.abs(dx) + Math.abs(dy) > 3) gesture.moved = true;
+    const clientDx = event.clientX - gesture.origin.x;
+    const clientDy = event.clientY - gesture.origin.y;
+    const dragThreshold = event.pointerType === "mouse"
+      ? MOUSE_DRAG_THRESHOLD_PX
+      : TOUCH_DRAG_THRESHOLD_PX;
+    if (Math.hypot(clientDx, clientDy) > dragThreshold) gesture.moved = true;
+    const dx = (clientDx / rect.width) * VIEWBOX.width;
+    const dy = (clientDy / rect.height) * VIEWBOX.height;
     applyTransform(gesture.startZoom, {
       x: gesture.startPan.x + dx,
       y: gesture.startPan.y + dy,
