@@ -11,6 +11,15 @@ type CityLabelMetric = Point & { width: number; height: number };
 const VIEWBOX = { width: 800, height: 650 };
 const POPOVER_WIDTH = 264;
 const STORAGE_KEY = "visited-china-levels-v1";
+const DESKTOP_MAX_ZOOM = 6;
+const TOUCH_MAX_ZOOM = 18;
+
+function maxZoomForCurrentDevice() {
+  if (typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches) {
+    return TOUCH_MAX_ZOOM;
+  }
+  return DESKTOP_MAX_ZOOM;
+}
 
 const levels: Array<{
   value: VisitLevel;
@@ -81,9 +90,11 @@ export default function Home() {
   const [popover, setPopover] = useState<Point>({ x: 16, y: 16 });
   const [isExporting, setIsExporting] = useState(false);
   const [storageReady, setStorageReady] = useState(false);
-  const [showLabels, setShowLabels] = useState(true);
+  const [showLabels, setShowLabels] = useState(false);
   const [labelMetrics, setLabelMetrics] = useState<Record<string, CityLabelMetric>>({});
   const [mapUnitScale, setMapUnitScale] = useState(1);
+  const [hoveredCity, setHoveredCity] = useState<string | null>(null);
+  const [hoverPoint, setHoverPoint] = useState<Point>({ x: 0, y: 0 });
 
   const stageRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -167,9 +178,27 @@ export default function Home() {
       const metric = labelMetrics[city];
       if (!metric) return false;
       const requiredWidth = Math.max(34, city.length * 11 + 10);
-      return metric.width * screenScale >= requiredWidth && metric.height * screenScale >= 17;
+      const screenWidth = metric.width * screenScale;
+      const screenHeight = metric.height * screenScale;
+      if (screenWidth >= requiredWidth && screenHeight >= 17) return true;
+      if (zoom >= 14) return true;
+      return zoom >= 8 && screenWidth >= 6 && screenHeight >= 6;
     });
   }, [cityNames, labelMetrics, mapUnitScale, showLabels, zoom]);
+
+  useEffect(() => {
+    if (showLabels) setHoveredCity(null);
+  }, [showLabels]);
+
+  const updateHoverTooltip = useCallback((city: string, event: React.PointerEvent<SVGPathElement>) => {
+    if (showLabels || event.pointerType !== "mouse" || !stageRef.current) return;
+    const stage = stageRef.current.getBoundingClientRect();
+    setHoveredCity(city);
+    setHoverPoint({
+      x: Math.max(8, Math.min(event.clientX - stage.left + 14, stage.width - 168)),
+      y: Math.max(8, Math.min(event.clientY - stage.top + 14, stage.height - 42)),
+    });
+  }, [showLabels]);
 
   const suggestions = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -221,7 +250,7 @@ export default function Home() {
 
   const zoomAt = useCallback((nextZoom: number, focus = { x: 400, y: 325 }) => {
     const current = transformRef.current;
-    const clamped = Math.max(1, Math.min(5, nextZoom));
+    const clamped = Math.max(1, Math.min(maxZoomForCurrentDevice(), nextZoom));
     applyTransform(clamped, {
       x: focus.x - ((focus.x - current.pan.x) / current.zoom) * clamped,
       y: focus.y - ((focus.y - current.pan.y) / current.zoom) * clamped,
@@ -236,7 +265,7 @@ export default function Home() {
     const path = pathRefs.current[city];
     if (!path) return;
     const bounds = path.getBBox();
-    const nextZoom = 3.1;
+    const nextZoom = maxZoomForCurrentDevice() > DESKTOP_MAX_ZOOM ? 5 : 3.1;
     const center = {
       x: bounds.x + bounds.width / 2,
       y: bounds.y + bounds.height / 2,
@@ -270,11 +299,33 @@ export default function Home() {
 
   const handlePointerDown = (event: React.PointerEvent<SVGSVGElement>) => {
     if (event.pointerType === "mouse" && event.button !== 0) return;
+    setHoveredCity(null);
     event.currentTarget.setPointerCapture(event.pointerId);
     const point = { x: event.clientX, y: event.clientY };
     activePointersRef.current.set(event.pointerId, point);
     const target = event.target as SVGElement;
     const transform = transformRef.current;
+    let city = target.dataset.city ?? null;
+    if (!city && event.pointerType !== "mouse") {
+      let nearestDistance = 22;
+      let nearestCenterDistance = Number.POSITIVE_INFINITY;
+      for (const candidate of cityNames) {
+        const bounds = pathRefs.current[candidate]?.getBoundingClientRect();
+        if (!bounds) continue;
+        const dx = Math.max(bounds.left - event.clientX, 0, event.clientX - bounds.right);
+        const dy = Math.max(bounds.top - event.clientY, 0, event.clientY - bounds.bottom);
+        const distance = Math.hypot(dx, dy);
+        const centerDistance = Math.hypot(
+          bounds.left + bounds.width / 2 - event.clientX,
+          bounds.top + bounds.height / 2 - event.clientY,
+        );
+        if (distance < nearestDistance || (distance === nearestDistance && centerDistance < nearestCenterDistance)) {
+          nearestDistance = distance;
+          nearestCenterDistance = centerDistance;
+          city = candidate;
+        }
+      }
+    }
 
     if (activePointersRef.current.size === 1) {
       gestureRef.current = {
@@ -285,7 +336,7 @@ export default function Home() {
         startDistance: 0,
         startCenter: { x: 0, y: 0 },
         moved: false,
-        city: target.dataset.city ?? null,
+        city,
       };
       return;
     }
@@ -324,7 +375,7 @@ export default function Home() {
       const [first, second] = Array.from(activePointersRef.current.values());
       const distance = Math.hypot(second.x - first.x, second.y - first.y);
       if (!gesture.startDistance) return;
-      const nextZoom = Math.max(1, Math.min(5, gesture.startZoom * distance / gesture.startDistance));
+      const nextZoom = Math.max(1, Math.min(maxZoomForCurrentDevice(), gesture.startZoom * distance / gesture.startDistance));
       const centerClient = {
         x: (first.x + second.x) / 2,
         y: (first.y + second.y) / 2,
@@ -555,6 +606,9 @@ export default function Home() {
                     vectorEffect="non-scaling-stroke"
                     tabIndex={0}
                     aria-label={`${chinaMap[city].name}, ${levels.find((item) => item.value === level)?.label}`}
+                    onPointerEnter={(event) => updateHoverTooltip(city, event)}
+                    onPointerMove={(event) => updateHoverTooltip(city, event)}
+                    onPointerLeave={() => setHoveredCity((current) => current === city ? null : current)}
                     onKeyDown={(event) => {
                       if (event.key === "Enter" || event.key === " ") {
                         event.preventDefault();
@@ -584,6 +638,16 @@ export default function Home() {
               })}
             </g>
           </svg>
+
+          {!showLabels && hoveredCity && (
+            <div
+              className="city-hover-tooltip"
+              style={{ left: hoverPoint.x, top: hoverPoint.y }}
+              aria-hidden="true"
+            >
+              {chinaMap[hoveredCity].name}
+            </div>
+          )}
 
           <button
             className={`label-toggle${showLabels ? " active" : ""}`}

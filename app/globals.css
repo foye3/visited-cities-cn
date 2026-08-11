@@ -338,6 +338,30 @@ button {
   user-select: none;
 }
 
+.city-hover-tooltip {
+  position: absolute;
+  z-index: 18;
+  min-width: 84px;
+  max-width: 160px;
+  padding: 7px 11px;
+  border: 1px solid rgba(37, 41, 35, 0.12);
+  border-radius: 10px;
+  background: rgba(255, 253, 248, 0.97);
+  color: var(--ink);
+  box-shadow: 0 8px 24px rgba(56, 49, 36, 0.14);
+  font-size: 13px;
+  font-weight: 750;
+  line-height: 1.2;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+@media (hover: none), (pointer: coarse) {
+  .city-hover-tooltip {
+    display: none;
+  }
+}
+
 @keyframes city-pulse {
   to { filter: brightness(1.12) drop-shadow(0 0 9px rgba(197,64,52,0.72)); }
 }
