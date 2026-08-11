@@ -17,12 +17,12 @@ const levels: Array<{
   english: string;
   color: string;
 }> = [
-  { value: 5, label: "居住过", english: "Lived", color: "#d84b3e" },
+  { value: 5, label: "居住", english: "Lived", color: "#d84b3e" },
   { value: 4, label: "短居", english: "Stayed", color: "#ef8354" },
-  { value: 3, label: "深度游玩", english: "Explored", color: "#f2bd4b" },
-  { value: 2, label: "到访", english: "Visited", color: "#4fa38b" },
+  { value: 3, label: "游玩", english: "Explored", color: "#f2bd4b" },
+  { value: 2, label: "出差", english: "Business", color: "#4fa38b" },
   { value: 1, label: "路过", english: "Passed", color: "#5d83b8" },
-  { value: 0, label: "未去过", english: "Not yet", color: "#d9d8d2" },
+  { value: 0, label: "没去过", english: "Not yet", color: "#d9d8d2" },
 ];
 
 const colorByLevel = Object.fromEntries(
@@ -89,6 +89,7 @@ export default function Home() {
     origin: Point;
     pan: Point;
     moved: boolean;
+    city: string | null;
   } | null>(null);
 
   useEffect(() => {
@@ -147,8 +148,8 @@ export default function Home() {
     }
     x = Math.max(12, Math.min(x, stage.width - POPOVER_WIDTH - 12));
     const y = Math.max(12, Math.min(
-      city.top + city.height / 2 - stage.top - 156,
-      stage.height - 324,
+      city.top + city.height / 2 - stage.top - 171,
+      stage.height - 354,
     ));
     setPopover({ x, y });
   }, [selectedCity]);
@@ -218,11 +219,13 @@ export default function Home() {
   const handlePointerDown = (event: React.PointerEvent<SVGSVGElement>) => {
     if (event.button !== 0) return;
     event.currentTarget.setPointerCapture(event.pointerId);
+    const target = event.target as SVGElement;
     pointerRef.current = {
       id: event.pointerId,
       origin: { x: event.clientX, y: event.clientY },
       pan,
       moved: false,
+      city: target.dataset.city ?? null,
     };
   };
 
@@ -237,12 +240,16 @@ export default function Home() {
   };
 
   const handlePointerUp = (event: React.PointerEvent<SVGSVGElement>) => {
-    if (pointerRef.current?.id === event.pointerId) {
+    const pointer = pointerRef.current;
+    if (pointer?.id === event.pointerId) {
+      if (!pointer.moved && pointer.city) setSelectedCity(pointer.city);
       event.currentTarget.releasePointerCapture(event.pointerId);
-      window.setTimeout(() => {
-        pointerRef.current = null;
-      }, 0);
+      pointerRef.current = null;
     }
+  };
+
+  const handlePointerCancel = (event: React.PointerEvent<SVGSVGElement>) => {
+    if (pointerRef.current?.id === event.pointerId) pointerRef.current = null;
   };
 
   const exportMap = async () => {
@@ -354,7 +361,7 @@ export default function Home() {
           <div className="map-caption">
             <span className="eyebrow">点击一座城市开始</span>
             <h1>你在中国，留下了多少足迹？</h1>
-            <p>点选城市标记到访程度，滚轮或按钮可缩放，拖动地图探索。</p>
+            <p>点选城市标记足迹等级，滚轮或按钮可缩放，拖动地图探索。</p>
           </div>
 
           <svg
@@ -367,7 +374,7 @@ export default function Home() {
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
-            onPointerCancel={handlePointerUp}
+            onPointerCancel={handlePointerCancel}
           >
             <g transform={`translate(${pan.x} ${pan.y}) scale(${zoom})`}>
               {cityNames.map((city) => {
@@ -386,11 +393,6 @@ export default function Home() {
                     vectorEffect="non-scaling-stroke"
                     tabIndex={0}
                     aria-label={`${chinaMap[city].name}, ${levels.find((item) => item.value === level)?.label}`}
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      if (pointerRef.current?.moved) return;
-                      setSelectedCity(city);
-                    }}
                     onKeyDown={(event) => {
                       if (event.key === "Enter" || event.key === " ") {
                         event.preventDefault();
@@ -421,7 +423,7 @@ export default function Home() {
             >
               <div className="popover-heading">
                 <div>
-                  <span>选择到访程度</span>
+                  <span>选择足迹等级</span>
                   <h2>{chinaMap[selectedCity].name}</h2>
                 </div>
                 <button onClick={() => setSelectedCity(null)} aria-label="Close">×</button>
