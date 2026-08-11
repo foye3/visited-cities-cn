@@ -13,6 +13,7 @@ const POPOVER_WIDTH = 264;
 const STORAGE_KEY = "visited-china-levels-v1";
 const DESKTOP_MAX_ZOOM = 6;
 const TOUCH_MAX_ZOOM = 18;
+const LEVEL_CLICK_GUARD_MS = 400;
 
 function maxZoomForCurrentDevice() {
   if (typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches) {
@@ -102,6 +103,7 @@ export default function Home() {
   const pathRefs = useRef<Record<string, SVGPathElement | null>>({});
   const activePointersRef = useRef<Map<number, Point>>(new Map());
   const transformRef = useRef({ zoom: 1, pan: { x: 0, y: 0 } });
+  const levelChoiceUnlockAtRef = useRef(0);
   const gestureRef = useRef<{
     primaryId: number;
     origin: Point;
@@ -281,6 +283,7 @@ export default function Home() {
 
   const chooseLevel = (level: VisitLevel) => {
     if (!selectedCity) return;
+    if (performance.now() < levelChoiceUnlockAtRef.current) return;
     setVisits((current) => ({ ...current, [selectedCity]: level }));
     setSelectedCity(null);
   };
@@ -415,7 +418,12 @@ export default function Home() {
     }
 
     if (activePointersRef.current.size === 0) {
-      if (gesture && !gesture.moved && gesture.city) setSelectedCity(gesture.city);
+      if (gesture && !gesture.moved && gesture.city) {
+        // Mobile browsers may dispatch a synthetic click after pointerup. If the
+        // newly opened menu is under the finger, that click must not choose a level.
+        levelChoiceUnlockAtRef.current = performance.now() + LEVEL_CLICK_GUARD_MS;
+        setSelectedCity(gesture.city);
+      }
       gestureRef.current = null;
       return;
     }
