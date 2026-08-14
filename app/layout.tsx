@@ -2,11 +2,8 @@ import type { Metadata, Viewport } from "next";
 import { Noto_Sans_SC, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 
-const isGitHubPagesBuild = process.env.GITHUB_PAGES === "true";
 const pagesBasePath = process.env.PAGES_BASE_PATH || "/visited-cities-cn";
-const siteUrl = isGitHubPagesBuild
-  ? `https://foye3.github.io${pagesBasePath}`
-  : "https://visited-china.foye3.chatgpt.site";
+const siteUrl = `https://foye3.github.io${pagesBasePath}`;
 
 const notoSans = Noto_Sans_SC({
   variable: "--font-noto-sans-sc",
@@ -50,7 +47,6 @@ export const metadata: Metadata = {
     apple: `${siteUrl}/apple-touch-icon.png`,
   },
   other: {
-    "codex-preview": "development",
     "apple-mobile-web-app-title": "中国城市足迹",
     "mobile-web-app-capable": "yes",
   },
