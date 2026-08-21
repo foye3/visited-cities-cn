@@ -4,11 +4,16 @@ import test from "node:test";
 
 const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
 
-test("enabled city labels are not filtered by region size", () => {
-  assert.ok(page.includes(
-    "() => showLabels ? cityNames.filter((city) => Boolean(labelMetrics[city])) : []",
-  ));
-  assert.ok(!page.includes("screenWidth >= requiredWidth"));
+test("enabled city labels progressively appear as the map zooms", () => {
+  assert.ok(page.includes("const zoomProgress"));
+  assert.ok(page.includes("screenWidth >= requiredWidth"));
+  assert.ok(page.includes("zoomProgress >= 0.35"));
+  assert.ok(page.includes("zoomProgress >= 0.65"));
+});
+
+test("maximum zoom guarantees every measured city label is shown", () => {
+  assert.ok(page.includes("const atMaxZoom = zoom >= maxZoom - 0.01"));
+  assert.ok(page.includes("if (atMaxZoom) return true"));
 });
 
 test("city labels expose selection semantics", () => {
