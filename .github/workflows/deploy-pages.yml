@@ -1,27 +1,24 @@
-name: GitHub Pages
+name: Deploy GitHub Pages
 
 on:
   push:
     branches:
       - main
-  pull_request:
-    branches:
-      - main
-    types: [opened, synchronize, reopened, closed]
   workflow_dispatch:
 
 concurrency:
-  group: pages-publish
+  group: pages-production
   cancel-in-progress: false
 
+permissions:
+  contents: read
+
 jobs:
-  validate:
-    if: github.event_name != 'pull_request' || github.event.action != 'closed'
+  build:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
     steps:
-      - name: Checkout source
+      - name: Checkout main
         uses: actions/checkout@v4
 
       - name: Set up Node.js
@@ -36,168 +33,31 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Build and test static export
+      - name: Build and test production export
         run: npm test
         env:
-          PAGES_BASE_PATH: ${{ github.event_name == 'pull_request' && format('/visited-cities-cn/preview/pr-{0}', github.event.number) || '/visited-cities-cn' }}
+          PAGES_BASE_PATH: /visited-cities-cn
+          NEXT_PUBLIC_EXPORT_SITE_ADDRESS: foye3.github.io/visited-cities-cn
 
-  publish:
-    # The github-pages environment only permits deployments from the default
-    # branch. PRs are fully built and tested by validate; deployment happens
-    # after merge (or from a manual dispatch).
-    if: >-
-      always() &&
-      github.event_name != 'pull_request' &&
-      (needs.validate.result == 'success' || needs.validate.result == 'skipped')
-    needs: validate
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: out
+
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: build
     runs-on: ubuntu-latest
     permissions:
-      contents: write
       pages: write
       id-token: write
-      pull-requests: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Checkout repository state
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          path: state
-
-      - name: Checkout main for production build
-        uses: actions/checkout@v4
-        with:
-          ref: main
-          path: production-source
-
-      - name: Checkout PR source
-        if: github.event_name == 'pull_request' && github.event.action != 'closed'
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}
-          path: preview-source
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: production-source/package-lock.json
-
-      - name: Build production from main
-        working-directory: production-source
-        run: |
-          npm ci
-          npx next build
-        env:
-          GITHUB_PAGES: "true"
-          PAGES_BASE_PATH: /visited-cities-cn
-          NEXT_PUBLIC_EXPORT_SITE_ADDRESS: foye3.github.io/visited-cities-cn
-
-      - name: Build PR preview
-        if: github.event_name == 'pull_request' && github.event.action != 'closed'
-        working-directory: preview-source
-        run: |
-          npm ci
-          npx next build
-        env:
-          GITHUB_PAGES: "true"
-          PAGES_BASE_PATH: /visited-cities-cn/preview/pr-${{ github.event.number }}
-          NEXT_PUBLIC_EXPORT_SITE_ADDRESS: foye3.github.io/visited-cities-cn/preview/pr-${{ github.event.number }}
-
-      - name: Update persisted Pages content
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd state
-          git fetch origin pages-content:refs/remotes/origin/pages-content || true
-          if git show-ref --verify --quiet refs/remotes/origin/pages-content; then
-            git switch -C pages-content origin/pages-content
-          else
-            git switch --orphan pages-content
-            git rm -rf .
-          fi
-
-          if [[ "${{ github.event_name }}" == "push" || "${{ github.event_name }}" == "workflow_dispatch" || ! -d production ]]; then
-            rm -rf production
-            mkdir -p production
-            cp -a ../production-source/out/. production/
-          fi
-
-          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            preview_dir="preview/pr-${{ github.event.number }}"
-            if [[ "${{ github.event.action }}" == "closed" ]]; then
-              rm -rf "$preview_dir"
-            else
-              rm -rf "$preview_dir"
-              mkdir -p "$preview_dir"
-              cp -a ../preview-source/out/. "$preview_dir/"
-            fi
-          fi
-
-          touch .nojekyll
-          git add -A
-          if ! git diff --cached --quiet; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git commit -m "Update GitHub Pages content"
-            git push origin pages-content
-          fi
-
-      - name: Assemble Pages artifact
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p deploy
-          cp -a state/production/. deploy/
-          if [[ -d state/preview ]]; then
-            mkdir -p deploy/preview
-            cp -a state/preview/. deploy/preview/
-          fi
-          touch deploy/.nojekyll
-
-      - name: Configure Pages
-        uses: actions/configure-pages@v5
-        with:
-          enablement: true
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: deploy
-
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
-
-      - name: Add or update PR preview link
-        if: github.event_name == 'pull_request' && github.event.action != 'closed'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const marker = '<!-- pages-preview -->';
-            const url = `https://${context.repo.owner}.github.io/${context.repo.repo}/preview/pr-${context.issue.number}/`;
-            const body = `${marker}\nGitHub Pages preview: ${url}`;
-            const comments = await github.paginate(github.rest.issues.listComments, {
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-            });
-            const previous = comments.find(comment => comment.user?.type === 'Bot' && comment.body?.includes(marker));
-            if (previous) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: previous.id,
-                body,
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                body,
-              });
-            }
