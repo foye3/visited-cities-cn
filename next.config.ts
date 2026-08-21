@@ -1,6 +1,6 @@
 import type { NextConfig } from "next";
 
-const basePath = process.env.PAGES_BASE_PATH || "/visited-cities-cn";
+const basePath = process.env.PAGES_BASE_PATH ?? "/visited-cities-cn";
 
 const nextConfig: NextConfig = {
   output: "export",
