@@ -30,9 +30,11 @@ test("neighboring Zhuhai retains its normal polygon target", () => {
   assert.ok(Math.max(zhuhai.width, zhuhai.height) > 4);
 });
 
-test("micro-city target is visible and independently clickable", async () => {
+test("micro-city target is invisible and only follows a visible label", async () => {
   const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
-  assert.ok(page.includes('className="micro-city-marker"'));
+  assert.ok(!page.includes('className="micro-city-marker"'));
   assert.ok(page.includes('className="micro-city-hit-area"'));
   assert.ok(page.includes("MICRO_CITY_HIT_RADIUS_PX"));
+  assert.ok(page.includes("visibleMicroCities.map"));
+  assert.ok(page.includes("microCities.filter((city) => visible.has(city))"));
 });
