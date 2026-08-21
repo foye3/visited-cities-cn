@@ -16,9 +16,14 @@ test("maximum zoom guarantees every measured city label is shown", () => {
   assert.ok(page.includes("if (atMaxZoom) return true"));
 });
 
-test("city labels expose selection semantics", () => {
+test("city labels are clickable without retaining native SVG focus", () => {
   assert.ok(page.includes('className="city-label"'));
   assert.ok(page.includes("data-city={city}"));
-  assert.ok(page.includes('role="button"'));
   assert.ok(page.includes("setSelectedCity(city)"));
+  const labelBlock = page.slice(
+    page.indexOf('key={`label-${city}`}'),
+    page.indexOf("{getCityLabel(city)}"),
+  );
+  assert.ok(!labelBlock.includes('role="button"'));
+  assert.ok(!labelBlock.includes("tabIndex={0}"));
 });
