@@ -565,6 +565,9 @@ export default function Home() {
             }}
             placeholder="搜索城市，例如：成都"
             aria-label="Search a city"
+            role="combobox"
+            aria-autocomplete="list"
+            aria-controls="city-suggestions"
             aria-expanded={searchOpen && suggestions.length > 0}
           />
           {search && (
@@ -573,9 +576,9 @@ export default function Home() {
             </button>
           )}
           {searchOpen && suggestions.length > 0 && (
-            <div className="suggestions" role="listbox">
+            <div id="city-suggestions" className="suggestions" role="listbox">
               {suggestions.map((city) => (
-                <button key={city} onClick={() => focusCity(city)} role="option">
+                <button key={city} onClick={() => focusCity(city)} role="option" aria-selected="false">
                   <span>{city}</span>
                   <small>{chinaMap[city].name}</small>
                 </button>

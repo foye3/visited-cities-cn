@@ -1,6 +1,8 @@
 @import "tailwindcss";
 
 :root {
+  --font-noto-sans-sc: "Noto Sans SC", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+  --font-space-grotesk: "Segoe UI", Arial, sans-serif;
   --ink: #232722;
   --muted: #777a73;
   --paper: #f4f0e7;
@@ -867,7 +869,14 @@ button {
   }
 
   .city-popover {
-    width: 264px;
+    top: auto !important;
+    right: auto;
+    bottom: max(12px, env(safe-area-inset-bottom));
+    left: max(12px, calc(50% - 132px)) !important;
+    width: min(264px, calc(100% - 24px));
+    height: 342px;
+    max-height: calc(100% - 24px);
+    overflow-y: auto;
   }
 
   .side-panel {

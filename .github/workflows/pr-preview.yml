@@ -1,0 +1,47 @@
+name: PR validation and local preview
+
+on:
+  pull_request:
+    branches:
+      - main
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR merge commit
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build and test local preview
+        run: npm test
+        env:
+          PAGES_BASE_PATH: ""
+          NEXT_PUBLIC_EXPORT_SITE_ADDRESS: localhost:8000
+
+      - name: Upload local preview
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-${{ github.event.pull_request.number }}-local-preview
+          path: out
+          if-no-files-found: error
+          retention-days: 14
