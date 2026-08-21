@@ -347,6 +347,25 @@ button {
   outline: none;
 }
 
+.micro-city-marker {
+  fill: var(--surface);
+  stroke: var(--red);
+  pointer-events: none;
+}
+
+.micro-city-hit-area {
+  fill: transparent;
+  stroke: transparent;
+  cursor: pointer;
+  pointer-events: all;
+}
+
+.micro-city-hit-area:focus-visible {
+  fill: rgba(197, 64, 52, 0.16);
+  stroke: var(--red);
+  outline: none;
+}
+
 .city-hover-tooltip {
   position: absolute;
   z-index: 18;
