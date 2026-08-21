@@ -869,7 +869,15 @@ button {
   }
 
   .city-popover {
-    width: 264px;
+    top: auto !important;
+    right: 12px;
+    bottom: max(12px, env(safe-area-inset-bottom));
+    left: 12px !important;
+    width: auto;
+    height: auto;
+    max-height: calc(100% - 24px);
+    overflow-y: auto;
+    border-radius: 22px;
   }
 
   .side-panel {
