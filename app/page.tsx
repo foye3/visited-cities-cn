@@ -19,7 +19,6 @@ const LEVEL_CLICK_GUARD_MS = 400;
 const MOUSE_DRAG_THRESHOLD_PX = 6;
 const TOUCH_DRAG_THRESHOLD_PX = 10;
 const MICRO_CITY_MAX_MAP_UNITS = 4;
-const MICRO_CITY_MARKER_RADIUS_PX = 5;
 const MICRO_CITY_HIT_RADIUS_PX = 18;
 const EXPORT_SITE_ADDRESS = process.env.NEXT_PUBLIC_EXPORT_SITE_ADDRESS
   || "visited-china.foye3.chatgpt.site";
@@ -189,10 +188,28 @@ export default function Home() {
     [visits],
   );
 
-  const visibleLabels = useMemo(
-    () => showLabels ? cityNames.filter((city) => Boolean(labelMetrics[city])) : [],
-    [cityNames, labelMetrics, showLabels],
-  );
+  const visibleLabels = useMemo(() => {
+    if (!showLabels) return [];
+    const screenScale = mapUnitScale * zoom;
+    const maxZoom = maxZoomForCurrentDevice();
+    const atMaxZoom = zoom >= maxZoom - 0.01;
+    const zoomProgress = maxZoom > 1 ? (zoom - 1) / (maxZoom - 1) : 1;
+
+    return cityNames.filter((city) => {
+      const metric = labelMetrics[city];
+      if (!metric) return false;
+      if (atMaxZoom) return true;
+
+      const labelLength = Array.from(getCityLabel(city)).length;
+      const requiredWidth = Math.max(34, labelLength * 11 + 10);
+      const screenWidth = metric.width * screenScale;
+      const screenHeight = metric.height * screenScale;
+
+      if (screenWidth >= requiredWidth && screenHeight >= 17) return true;
+      if (zoomProgress >= 0.35 && screenWidth >= 12 && screenHeight >= 8) return true;
+      return zoomProgress >= 0.65 && screenWidth >= 5 && screenHeight >= 5;
+    });
+  }, [cityNames, labelMetrics, mapUnitScale, showLabels, zoom]);
   const microCities = useMemo(
     () => cityNames.filter((city) => {
       const metric = labelMetrics[city];
@@ -200,6 +217,10 @@ export default function Home() {
     }),
     [cityNames, labelMetrics],
   );
+  const visibleMicroCities = useMemo(() => {
+    const visible = new Set(visibleLabels);
+    return microCities.filter((city) => visible.has(city));
+  }, [microCities, visibleLabels]);
 
   useEffect(() => {
     if (showLabels) setHoveredCity(null);
@@ -498,7 +519,13 @@ export default function Home() {
         .join("");
       const exportLabels = showLabels
         ? cityNames
-          .filter((city) => Boolean(labelMetrics[city]))
+          .filter((city) => {
+            const metric = labelMetrics[city];
+            if (!metric) return false;
+            const labelLength = Array.from(getCityLabel(city)).length;
+            const requiredWidth = Math.max(40, labelLength * 14 + 12);
+            return metric.width * mapScale >= requiredWidth && metric.height * mapScale >= 20;
+          })
           .map((city) => {
             const metric = labelMetrics[city];
             return `<text x="${metric.x}" y="${metric.y}" text-anchor="middle" dominant-baseline="central" font-family="Arial,'Noto Sans SC',sans-serif" font-size="11" font-weight="700" fill="#242824" stroke="#fffdf8" stroke-width="2.6" paint-order="stroke">${escapeXml(getCityLabel(city))}</text>`;
@@ -662,19 +689,11 @@ export default function Home() {
                   />
                 );
               })}
-              {microCities.map((city) => {
+              {visibleMicroCities.map((city) => {
                 const metric = labelMetrics[city];
                 const screenScale = Math.max(mapUnitScale * zoom, 0.01);
                 return (
                   <g key={`micro-${city}`} className="micro-city-target">
-                    <circle
-                      className="micro-city-marker"
-                      cx={metric.x}
-                      cy={metric.y}
-                      r={MICRO_CITY_MARKER_RADIUS_PX / screenScale}
-                      strokeWidth={1.8 / screenScale}
-                      aria-hidden="true"
-                    />
                     <circle
                       className="micro-city-hit-area"
                       data-city={city}
