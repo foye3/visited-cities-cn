@@ -18,6 +18,9 @@ const TOUCH_MAX_ZOOM = 18;
 const LEVEL_CLICK_GUARD_MS = 400;
 const MOUSE_DRAG_THRESHOLD_PX = 6;
 const TOUCH_DRAG_THRESHOLD_PX = 10;
+const MICRO_CITY_MAX_MAP_UNITS = 4;
+const MICRO_CITY_MARKER_RADIUS_PX = 5;
+const MICRO_CITY_HIT_RADIUS_PX = 18;
 const EXPORT_SITE_ADDRESS = process.env.NEXT_PUBLIC_EXPORT_SITE_ADDRESS
   || "visited-china.foye3.chatgpt.site";
 
@@ -189,6 +192,13 @@ export default function Home() {
   const visibleLabels = useMemo(
     () => showLabels ? cityNames.filter((city) => Boolean(labelMetrics[city])) : [],
     [cityNames, labelMetrics, showLabels],
+  );
+  const microCities = useMemo(
+    () => cityNames.filter((city) => {
+      const metric = labelMetrics[city];
+      return metric && Math.max(metric.width, metric.height) <= MICRO_CITY_MAX_MAP_UNITS;
+    }),
+    [cityNames, labelMetrics],
   );
 
   useEffect(() => {
@@ -650,6 +660,43 @@ export default function Home() {
                       }
                     }}
                   />
+                );
+              })}
+              {microCities.map((city) => {
+                const metric = labelMetrics[city];
+                const screenScale = Math.max(mapUnitScale * zoom, 0.01);
+                return (
+                  <g key={`micro-${city}`} className="micro-city-target">
+                    <circle
+                      className="micro-city-marker"
+                      cx={metric.x}
+                      cy={metric.y}
+                      r={MICRO_CITY_MARKER_RADIUS_PX / screenScale}
+                      strokeWidth={1.8 / screenScale}
+                      aria-hidden="true"
+                    />
+                    <circle
+                      className="micro-city-hit-area"
+                      data-city={city}
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`Select ${chinaMap[city].name}`}
+                      cx={metric.x}
+                      cy={metric.y}
+                      r={MICRO_CITY_HIT_RADIUS_PX / screenScale}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        levelChoiceUnlockAtRef.current = performance.now() + LEVEL_CLICK_GUARD_MS;
+                        setSelectedCity(city);
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          setSelectedCity(city);
+                        }
+                      }}
+                    />
+                  </g>
                 );
               })}
               {visibleLabels.map((city) => {
