@@ -682,9 +682,6 @@ export default function Home() {
                     key={`label-${city}`}
                     className="city-label"
                     data-city={city}
-                    role="button"
-                    tabIndex={0}
-                    aria-label={`Select ${chinaMap[city].name}`}
                     x={metric.x}
                     y={metric.y}
                     fontSize={10.5 / Math.max(mapUnitScale * zoom, 0.01)}
@@ -695,12 +692,6 @@ export default function Home() {
                       event.stopPropagation();
                       levelChoiceUnlockAtRef.current = performance.now() + LEVEL_CLICK_GUARD_MS;
                       setSelectedCity(city);
-                    }}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter" || event.key === " ") {
-                        event.preventDefault();
-                        setSelectedCity(city);
-                      }
                     }}
                   >
                     {getCityLabel(city)}
