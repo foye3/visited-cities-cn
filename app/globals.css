@@ -1,6 +1,8 @@
 @import "tailwindcss";
 
 :root {
+  --font-noto-sans-sc: "Noto Sans SC", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+  --font-space-grotesk: "Segoe UI", Arial, sans-serif;
   --ink: #232722;
   --muted: #777a73;
   --paper: #f4f0e7;
