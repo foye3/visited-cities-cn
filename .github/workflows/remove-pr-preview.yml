@@ -1,0 +1,77 @@
+name: Remove closed PR Pages preview
+
+on:
+  pull_request_target:
+    branches:
+      - main
+    types:
+      - closed
+
+concurrency:
+  group: pages-publish
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    env:
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+    steps:
+      - name: Checkout trusted repository state
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          path: state
+
+      - name: Remove persisted preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd state
+          git fetch origin pages-content:refs/remotes/origin/pages-content
+          git switch -C pages-content origin/pages-content
+
+          preview_dir="preview/pr-${PR_NUMBER}"
+          rm -rf "${preview_dir}"
+          git add --all -- "${preview_dir}"
+
+          if ! git diff --cached --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -m "Remove preview for PR #${PR_NUMBER}"
+            git push origin pages-content
+          fi
+
+      - name: Assemble production and remaining previews
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -d state/production
+          mkdir -p deploy
+          cp -a state/production/. deploy/
+          if [[ -d state/preview ]]; then
+            mkdir -p deploy/preview
+            cp -a state/preview/. deploy/preview/
+          fi
+          touch deploy/.nojekyll
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: deploy
+
+      - name: Deploy combined Pages content
+        id: deployment
+        uses: actions/deploy-pages@v4
