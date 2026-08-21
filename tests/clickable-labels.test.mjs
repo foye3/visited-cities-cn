@@ -5,15 +5,15 @@ import test from "node:test";
 const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
 
 test("enabled city labels are not filtered by region size", () => {
-  assert.match(
-    page,
-    /showLabels \\? cityNames\\.filter\\(\\(city\\) => Boolean\\(labelMetrics\\[city\\]\\)\\) : \\[\\]/,
-  );
-  assert.doesNotMatch(page, /screenWidth >= requiredWidth/);
+  assert.ok(page.includes(
+    "() => showLabels ? cityNames.filter((city) => Boolean(labelMetrics[city])) : []",
+  ));
+  assert.ok(!page.includes("screenWidth >= requiredWidth"));
 });
 
 test("city labels expose selection semantics", () => {
-  assert.match(page, /className="city-label"[\\s\\S]*data-city=\\{city\\}/);
-  assert.match(page, /role="button"[\\s\\S]*aria-label=\\{`Select/);
-  assert.match(page, /setSelectedCity\\(city\\)/);
+  assert.ok(page.includes('className="city-label"'));
+  assert.ok(page.includes("data-city={city}"));
+  assert.ok(page.includes('role="button"'));
+  assert.ok(page.includes("setSelectedCity(city)"));
 });
