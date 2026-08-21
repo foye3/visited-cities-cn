@@ -870,14 +870,13 @@ button {
 
   .city-popover {
     top: auto !important;
-    right: 12px;
+    right: auto;
     bottom: max(12px, env(safe-area-inset-bottom));
-    left: 12px !important;
-    width: auto;
-    height: auto;
+    left: max(12px, calc(50% - 132px)) !important;
+    width: min(264px, calc(100% - 24px));
+    height: 342px;
     max-height: calc(100% - 24px);
     overflow-y: auto;
-    border-radius: 22px;
   }
 
   .side-panel {
