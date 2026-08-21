@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: pages-production
+  group: pages-publish
   cancel-in-progress: false
 
 permissions:
@@ -17,27 +17,79 @@ jobs:
   build:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Checkout main
         uses: actions/checkout@v4
+        with:
+          path: source
+
+      - name: Checkout repository state
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          path: state
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: source/package-lock.json
 
       - name: Install dependencies
+        working-directory: source
         run: npm ci
 
       - name: Lint
+        working-directory: source
         run: npm run lint
 
       - name: Build and test production export
+        working-directory: source
         run: npm test
         env:
           PAGES_BASE_PATH: /visited-cities-cn
           NEXT_PUBLIC_EXPORT_SITE_ADDRESS: foye3.github.io/visited-cities-cn
+
+      - name: Persist production and preserve PR previews
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd state
+          git fetch origin pages-content:refs/remotes/origin/pages-content || true
+          if git show-ref --verify --quiet refs/remotes/origin/pages-content; then
+            git switch -C pages-content origin/pages-content
+          else
+            git switch --orphan pages-content
+            git rm -rf .
+          fi
+
+          rm -rf production
+          mkdir -p production
+          cp -a ../source/out/. production/
+          touch .nojekyll
+
+          git add --all -- production .nojekyll
+          if ! git diff --cached --quiet; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -m "Update production Pages content"
+            git push origin pages-content
+          fi
+
+      - name: Assemble production and active previews
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p deploy
+          cp -a state/production/. deploy/
+          if [[ -d state/preview ]]; then
+            mkdir -p deploy/preview
+            cp -a state/preview/. deploy/preview/
+          fi
+          touch deploy/.nojekyll
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
@@ -45,7 +97,7 @@ jobs:
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4
         with:
-          path: out
+          path: deploy
 
   deploy:
     if: github.ref == 'refs/heads/main'
