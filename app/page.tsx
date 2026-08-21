@@ -186,20 +186,10 @@ export default function Home() {
     [visits],
   );
 
-  const visibleLabels = useMemo(() => {
-    if (!showLabels) return [];
-    const screenScale = mapUnitScale * zoom;
-    return cityNames.filter((city) => {
-      const metric = labelMetrics[city];
-      if (!metric) return false;
-      const requiredWidth = Math.max(34, getCityLabel(city).length * 11 + 10);
-      const screenWidth = metric.width * screenScale;
-      const screenHeight = metric.height * screenScale;
-      if (screenWidth >= requiredWidth && screenHeight >= 17) return true;
-      if (zoom >= 14) return true;
-      return zoom >= 8 && screenWidth >= 6 && screenHeight >= 6;
-    });
-  }, [cityNames, labelMetrics, mapUnitScale, showLabels, zoom]);
+  const visibleLabels = useMemo(
+    () => showLabels ? cityNames.filter((city) => Boolean(labelMetrics[city])) : [],
+    [cityNames, labelMetrics, showLabels],
+  );
 
   useEffect(() => {
     if (showLabels) setHoveredCity(null);
@@ -498,12 +488,7 @@ export default function Home() {
         .join("");
       const exportLabels = showLabels
         ? cityNames
-          .filter((city) => {
-            const metric = labelMetrics[city];
-            if (!metric) return false;
-            const requiredWidth = Math.max(40, getCityLabel(city).length * 14 + 12);
-            return metric.width * mapScale >= requiredWidth && metric.height * mapScale >= 20;
-          })
+          .filter((city) => Boolean(labelMetrics[city]))
           .map((city) => {
             const metric = labelMetrics[city];
             return `<text x="${metric.x}" y="${metric.y}" text-anchor="middle" dominant-baseline="central" font-family="Arial,'Noto Sans SC',sans-serif" font-size="11" font-weight="700" fill="#242824" stroke="#fffdf8" stroke-width="2.6" paint-order="stroke">${escapeXml(getCityLabel(city))}</text>`;
@@ -673,13 +658,27 @@ export default function Home() {
                   <text
                     key={`label-${city}`}
                     className="city-label"
+                    data-city={city}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`Select ${chinaMap[city].name}`}
                     x={metric.x}
                     y={metric.y}
                     fontSize={10.5 / Math.max(mapUnitScale * zoom, 0.01)}
                     strokeWidth={2.7 / Math.max(mapUnitScale * zoom, 0.01)}
                     textAnchor="middle"
                     dominantBaseline="central"
-                    aria-hidden="true"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      levelChoiceUnlockAtRef.current = performance.now() + LEVEL_CLICK_GUARD_MS;
+                      setSelectedCity(city);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        setSelectedCity(city);
+                      }
+                    }}
                   >
                     {getCityLabel(city)}
                   </text>
