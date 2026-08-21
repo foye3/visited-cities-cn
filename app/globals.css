@@ -341,10 +341,8 @@ button {
   user-select: none;
 }
 
-.city-label:hover,
-.city-label:focus-visible {
+.city-label:hover {
   fill: var(--red);
-  outline: none;
 }
 
 .city-hover-tooltip {
