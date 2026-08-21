@@ -347,12 +347,6 @@ button {
   outline: none;
 }
 
-.micro-city-marker {
-  fill: var(--surface);
-  stroke: var(--red);
-  pointer-events: none;
-}
-
 .micro-city-hit-area {
   fill: transparent;
   stroke: transparent;
