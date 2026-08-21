@@ -20,7 +20,7 @@ function dimensions(path) {
   };
 }
 
-test("Macau qualifies for the micro-city interaction target", () => {
+test("Macau geometry remains recognizably tiny", () => {
   const macau = dimensions(chinaMap["澳门特别行政区"].path);
   assert.ok(Math.max(macau.width, macau.height) <= 4);
 });
@@ -30,11 +30,9 @@ test("neighboring Zhuhai retains its normal polygon target", () => {
   assert.ok(Math.max(zhuhai.width, zhuhai.height) > 4);
 });
 
-test("micro-city target is invisible and only follows a visible label", async () => {
+test("micro cities do not add a separate SVG target or marker", async () => {
   const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
   assert.ok(!page.includes('className="micro-city-marker"'));
-  assert.ok(page.includes('className="micro-city-hit-area"'));
-  assert.ok(page.includes("MICRO_CITY_HIT_RADIUS_PX"));
-  assert.ok(page.includes("visibleMicroCities.map"));
-  assert.ok(page.includes("microCities.filter((city) => visible.has(city))"));
+  assert.ok(!page.includes('className="micro-city-hit-area"'));
+  assert.ok(!page.includes("MICRO_CITY_HIT_RADIUS_PX"));
 });
