@@ -63,7 +63,7 @@ jobs:
             git switch -C pages-content origin/pages-content
           else
             git switch --orphan pages-content
-            git rm -rf .
+            git rm -rf --ignore-unmatch .
           fi
 
           rm -rf production
