@@ -336,8 +336,13 @@ button {
   font-family: var(--font-noto-sans-sc), sans-serif;
   font-weight: 800;
   letter-spacing: 0.02em;
-  pointer-events: none;
+  pointer-events: auto;
+  cursor: pointer;
   user-select: none;
+}
+
+.city-label:hover {
+  fill: var(--red);
 }
 
 .city-hover-tooltip {

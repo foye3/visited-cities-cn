@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { chinaMap } from "../lib/china-map-data";
+import { getCityLabel } from "../lib/city-labels";
+import { findInteriorPoint } from "../lib/label-geometry.mjs";
 
 type VisitLevel = 0 | 1 | 2 | 3 | 4 | 5;
 type VisitState = Record<string, VisitLevel>;
@@ -86,6 +88,10 @@ function escapeXml(value: string) {
 
 export default function Home() {
   const cityNames = useMemo(() => Object.keys(chinaMap), []);
+  const labelAnchors = useMemo(
+    () => Object.fromEntries(cityNames.map((city) => [city, findInteriorPoint(chinaMap[city].path)])),
+    [cityNames],
+  );
   const [visits, setVisits] = useState<VisitState>({});
   const [selectedCity, setSelectedCity] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -149,9 +155,10 @@ export default function Home() {
         const path = pathRefs.current[city];
         if (!path) continue;
         const bounds = path.getBBox();
+        const anchor = labelAnchors[city];
         nextMetrics[city] = {
-          x: bounds.x + bounds.width / 2 + chinaMap[city].offset.x,
-          y: bounds.y + bounds.height / 2 + chinaMap[city].offset.y,
+          x: anchor.x + chinaMap[city].offset.x,
+          y: anchor.y + chinaMap[city].offset.y,
           width: bounds.width,
           height: bounds.height,
         };
@@ -168,7 +175,7 @@ export default function Home() {
       cancelAnimationFrame(frame);
       observer.disconnect();
     };
-  }, [cityNames]);
+  }, [cityNames, labelAnchors]);
 
   const score = useMemo(
     () => Object.values(visits).reduce<number>((sum, level) => sum + level, 0),
@@ -182,18 +189,25 @@ export default function Home() {
   const visibleLabels = useMemo(() => {
     if (!showLabels) return [];
     const screenScale = mapUnitScale * zoom;
+    const maxZoom = maxZoomForCurrentDevice();
+    const atMaxZoom = zoom >= maxZoom - 0.01;
+    const zoomProgress = maxZoom > 1 ? (zoom - 1) / (maxZoom - 1) : 1;
+
     return cityNames.filter((city) => {
       const metric = labelMetrics[city];
       if (!metric) return false;
-      const requiredWidth = Math.max(34, city.length * 11 + 10);
+      if (atMaxZoom) return true;
+
+      const labelLength = Array.from(getCityLabel(city)).length;
+      const requiredWidth = Math.max(34, labelLength * 11 + 10);
       const screenWidth = metric.width * screenScale;
       const screenHeight = metric.height * screenScale;
+
       if (screenWidth >= requiredWidth && screenHeight >= 17) return true;
-      if (zoom >= 14) return true;
-      return zoom >= 8 && screenWidth >= 6 && screenHeight >= 6;
+      if (zoomProgress >= 0.35 && screenWidth >= 12 && screenHeight >= 8) return true;
+      return zoomProgress >= 0.65 && screenWidth >= 5 && screenHeight >= 5;
     });
   }, [cityNames, labelMetrics, mapUnitScale, showLabels, zoom]);
-
   useEffect(() => {
     if (showLabels) setHoveredCity(null);
   }, [showLabels]);
@@ -494,12 +508,13 @@ export default function Home() {
           .filter((city) => {
             const metric = labelMetrics[city];
             if (!metric) return false;
-            const requiredWidth = Math.max(40, city.length * 14 + 12);
+            const labelLength = Array.from(getCityLabel(city)).length;
+            const requiredWidth = Math.max(40, labelLength * 14 + 12);
             return metric.width * mapScale >= requiredWidth && metric.height * mapScale >= 20;
           })
           .map((city) => {
             const metric = labelMetrics[city];
-            return `<text x="${metric.x}" y="${metric.y}" text-anchor="middle" dominant-baseline="central" font-family="Arial,'Noto Sans SC',sans-serif" font-size="11" font-weight="700" fill="#242824" stroke="#fffdf8" stroke-width="2.6" paint-order="stroke">${escapeXml(city)}</text>`;
+            return `<text x="${metric.x}" y="${metric.y}" text-anchor="middle" dominant-baseline="central" font-family="Arial,'Noto Sans SC',sans-serif" font-size="11" font-weight="700" fill="#242824" stroke="#fffdf8" stroke-width="2.6" paint-order="stroke">${escapeXml(getCityLabel(city))}</text>`;
           })
           .join("")
         : "";
@@ -666,15 +681,20 @@ export default function Home() {
                   <text
                     key={`label-${city}`}
                     className="city-label"
+                    data-city={city}
                     x={metric.x}
                     y={metric.y}
                     fontSize={10.5 / Math.max(mapUnitScale * zoom, 0.01)}
                     strokeWidth={2.7 / Math.max(mapUnitScale * zoom, 0.01)}
                     textAnchor="middle"
                     dominantBaseline="central"
-                    aria-hidden="true"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      levelChoiceUnlockAtRef.current = performance.now() + LEVEL_CLICK_GUARD_MS;
+                      setSelectedCity(city);
+                    }}
                   >
-                    {city}
+                    {getCityLabel(city)}
                   </text>
                 );
               })}
