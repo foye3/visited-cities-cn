@@ -43,7 +43,14 @@ npm run lint
 npm test
 ```
 
-`npm test` performs the static Next.js build and then validates the exported HTML.
+`npm test` performs the static Next.js build and then runs regression checks for exported HTML, map/label geometry, clickable and micro-city behavior, and localization coverage.
+
+### Contributor and AI-agent guidance
+
+- [`AGENTS.md`](AGENTS.md) is the compact implementation map: architecture, invariants, task-to-file routing, and validation expectations.
+- [`docs/agent-playbooks.md`](docs/agent-playbooks.md) contains deeper task-specific guidance for localization, map interactions/geometry, PNG export, and GitHub Pages workflows.
+
+These guides intentionally avoid duplicating product documentation and point agents away from loading the large map dataset when a task does not require it.
 
 ## GitHub Pages publishing
 
