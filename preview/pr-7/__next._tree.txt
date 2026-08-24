@@ -1,2 +1,2 @@
 :HL["/visited-cities-cn/preview/pr-7/_next/static/chunks/152nshnm~ao22.css","style"]
-0:{"tree":{"name":"","param":null,"prefetchHints":16,"slots":{"children":{"name":"__PAGE__","param":null,"prefetchHints":0,"slots":null}}},"staleTime":300,"buildId":"7ZixgGE5tj6a3w_uE0IoX"}
+0:{"tree":{"name":"","param":null,"prefetchHints":16,"slots":{"children":{"name":"__PAGE__","param":null,"prefetchHints":0,"slots":null}}},"staleTime":300,"buildId":"lVjT-AGeQxdku4W5E0UuJ"}
