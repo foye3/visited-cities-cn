@@ -4,30 +4,30 @@ import "./globals.css";
 const pagesBasePath = process.env.PAGES_BASE_PATH || "/visited-cities-cn";
 const siteUrl = `https://foye3.github.io${pagesBasePath}`;
 
-
 export const metadata: Metadata = {
   metadataBase: new URL(`${siteUrl}/`),
-  title: "中国地级市足迹",
-  description: "点亮你去过的中国城市，按居住、短居、游玩、出差与路过记录足迹并生成专属地图。",
-  applicationName: "中国地级市足迹",
+  title: "中国地级市足迹 | Visited China",
+  description: "点亮你去过的中国城市并生成专属足迹地图。Switch between Chinese and English to mark and export your China city footprint.",
+  applicationName: "中国城市足迹 | Visited China",
   openGraph: {
-    title: "中国地级市足迹",
-    description: "点亮你去过的中国城市，生成专属足迹地图。",
+    title: "中国地级市足迹 | Visited China",
+    description: "点亮你去过的中国城市并生成专属足迹地图。Mark the cities and regions you have visited across China.",
     url: siteUrl,
-    siteName: "中国地级市足迹",
+    siteName: "中国地级市足迹 | Visited China",
     locale: "zh_CN",
+    alternateLocale: ["en_US"],
     type: "website",
     images: [{
       url: `${siteUrl}/social-preview.png`,
       width: 1200,
       height: 630,
-      alt: "中国地级市足迹互动地图",
+      alt: "中国地级市足迹 / Visited China interactive city map",
     }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "中国地级市足迹",
-    description: "点亮你去过的中国城市，生成专属足迹地图。",
+    title: "中国地级市足迹 | Visited China",
+    description: "Mark the cities and regions you have visited across China and export your footprint map.",
     images: [`${siteUrl}/social-preview.png`],
   },
   icons: {
@@ -36,7 +36,7 @@ export const metadata: Metadata = {
     apple: `${siteUrl}/apple-touch-icon.png`,
   },
   other: {
-    "apple-mobile-web-app-title": "中国城市足迹",
+    "apple-mobile-web-app-title": "Visited China",
     "mobile-web-app-capable": "yes",
   },
 };

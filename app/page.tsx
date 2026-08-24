@@ -1,8 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { getEnglishCityName } from "../lib/city-names-en";
 import { chinaMap } from "../lib/china-map-data";
 import { getCityLabel } from "../lib/city-labels";
+import { isLocale, levelText, LOCALE_STORAGE_KEY, type Locale, uiText } from "../lib/i18n";
 import { findInteriorPoint } from "../lib/label-geometry.mjs";
 
 type VisitLevel = 0 | 1 | 2 | 3 | 4 | 5;
@@ -30,16 +32,14 @@ function maxZoomForCurrentDevice() {
 
 const levels: Array<{
   value: VisitLevel;
-  label: string;
-  english: string;
   color: string;
 }> = [
-  { value: 5, label: "居住", english: "Lived", color: "#d84b3e" },
-  { value: 4, label: "短居", english: "Stayed", color: "#ef8354" },
-  { value: 3, label: "游玩", english: "Explored", color: "#f2bd4b" },
-  { value: 2, label: "出差", english: "Business", color: "#4fa38b" },
-  { value: 1, label: "路过", english: "Passed", color: "#5d83b8" },
-  { value: 0, label: "没去过", english: "Not yet", color: "#d9d8d2" },
+  { value: 5, color: "#d84b3e" },
+  { value: 4, color: "#ef8354" },
+  { value: 3, color: "#f2bd4b" },
+  { value: 2, color: "#4fa38b" },
+  { value: 1, color: "#5d83b8" },
+  { value: 0, color: "#d9d8d2" },
 ];
 
 const colorByLevel = Object.fromEntries(
@@ -106,6 +106,19 @@ export default function Home() {
   const [mapUnitScale, setMapUnitScale] = useState(1);
   const [hoveredCity, setHoveredCity] = useState<string | null>(null);
   const [hoverPoint, setHoverPoint] = useState<Point>({ x: 0, y: 0 });
+  const [locale, setLocale] = useState<Locale>("zh-CN");
+
+  const t = uiText[locale];
+  const localizedLevels = levelText[locale];
+
+  const cityLabel = useCallback(
+    (city: string) => locale === "en" ? getEnglishCityName(city) : getCityLabel(city),
+    [locale],
+  );
+  const cityTitle = useCallback(
+    (city: string) => locale === "en" ? getEnglishCityName(city) : chinaMap[city].name,
+    [locale],
+  );
 
   const stageRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -131,6 +144,8 @@ export default function Home() {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) setVisits(JSON.parse(stored) as VisitState);
+      const storedLocale = localStorage.getItem(LOCALE_STORAGE_KEY);
+      if (isLocale(storedLocale)) setLocale(storedLocale);
     } catch {
       // A private browser session may block storage; the map still works.
     } finally {
@@ -146,6 +161,18 @@ export default function Home() {
       // Keep the current in-memory state if storage is unavailable.
     }
   }, [storageReady, visits]);
+
+  useEffect(() => {
+    if (!storageReady) return;
+    try {
+      localStorage.setItem(LOCALE_STORAGE_KEY, locale);
+    } catch {
+      // Language switching still works for the current session if storage is unavailable.
+    }
+    document.documentElement.lang = locale;
+    document.title = t.documentTitle;
+    document.querySelector('meta[name="description"]')?.setAttribute("content", t.documentDescription);
+  }, [locale, storageReady, t.documentDescription, t.documentTitle]);
 
   useEffect(() => {
     const measureMap = () => {
@@ -198,8 +225,9 @@ export default function Home() {
       if (!metric) return false;
       if (atMaxZoom) return true;
 
-      const labelLength = Array.from(getCityLabel(city)).length;
-      const requiredWidth = Math.max(34, labelLength * 11 + 10);
+      const labelLength = Array.from(cityLabel(city)).length;
+      const widthPerCharacter = locale === "en" ? 6.2 : 11;
+      const requiredWidth = Math.max(34, labelLength * widthPerCharacter + 10);
       const screenWidth = metric.width * screenScale;
       const screenHeight = metric.height * screenScale;
 
@@ -207,7 +235,8 @@ export default function Home() {
       if (zoomProgress >= 0.35 && screenWidth >= 12 && screenHeight >= 8) return true;
       return zoomProgress >= 0.65 && screenWidth >= 5 && screenHeight >= 5;
     });
-  }, [cityNames, labelMetrics, mapUnitScale, showLabels, zoom]);
+  }, [cityLabel, cityNames, labelMetrics, locale, mapUnitScale, showLabels, zoom]);
+
   useEffect(() => {
     if (showLabels) setHoveredCity(null);
   }, [showLabels]);
@@ -227,16 +256,21 @@ export default function Home() {
     if (!query) return [];
     return cityNames
       .filter((city) => {
-        const fullName = chinaMap[city].name;
-        return city.toLowerCase().includes(query) || fullName.toLowerCase().includes(query);
+        const fullName = chinaMap[city].name.toLowerCase();
+        const englishName = getEnglishCityName(city).toLowerCase();
+        return city.toLowerCase().includes(query)
+          || fullName.includes(query)
+          || englishName.includes(query);
       })
       .sort((a, b) => {
-        const aStarts = a.toLowerCase().startsWith(query) ? 0 : 1;
-        const bStarts = b.toLowerCase().startsWith(query) ? 0 : 1;
-        return aStarts - bStarts || a.localeCompare(b, "zh-CN");
+        const aLabel = cityLabel(a).toLowerCase();
+        const bLabel = cityLabel(b).toLowerCase();
+        const aStarts = aLabel.startsWith(query) ? 0 : 1;
+        const bStarts = bLabel.startsWith(query) ? 0 : 1;
+        return aStarts - bStarts || aLabel.localeCompare(bLabel, locale === "en" ? "en" : "zh-CN");
       })
       .slice(0, 8);
-  }, [cityNames, search]);
+  }, [cityLabel, cityNames, locale, search]);
 
   const updatePopover = useCallback(() => {
     if (!selectedCity || !stageRef.current || !pathRefs.current[selectedCity]) return;
@@ -297,9 +331,9 @@ export default function Home() {
       x: VIEWBOX.width / 2 - center.x * nextZoom,
       y: VIEWBOX.height / 2 - center.y * nextZoom,
     });
-    setSearch(city);
+    setSearch(cityLabel(city));
     setSearchOpen(false);
-  }, [applyTransform]);
+  }, [applyTransform, cityLabel]);
 
   const chooseLevel = (level: VisitLevel) => {
     if (!selectedCity) return;
@@ -484,7 +518,7 @@ export default function Home() {
 
   const clearAllMarks = () => {
     if (Object.keys(visits).length === 0) return;
-    if (!window.confirm("确定清除所有城市标记吗？此操作无法撤销。")) return;
+    if (!window.confirm(t.clearConfirm)) return;
     setVisits({});
     setSelectedCity(null);
     setSearch("");
@@ -508,23 +542,29 @@ export default function Home() {
           .filter((city) => {
             const metric = labelMetrics[city];
             if (!metric) return false;
-            const labelLength = Array.from(getCityLabel(city)).length;
-            const requiredWidth = Math.max(40, labelLength * 14 + 12);
+            const labelLength = Array.from(cityLabel(city)).length;
+            const widthPerCharacter = locale === "en" ? 7.4 : 14;
+            const requiredWidth = Math.max(40, labelLength * widthPerCharacter + 12);
             return metric.width * mapScale >= requiredWidth && metric.height * mapScale >= 20;
           })
           .map((city) => {
             const metric = labelMetrics[city];
-            return `<text x="${metric.x}" y="${metric.y}" text-anchor="middle" dominant-baseline="central" font-family="Arial,'Noto Sans SC',sans-serif" font-size="11" font-weight="700" fill="#242824" stroke="#fffdf8" stroke-width="2.6" paint-order="stroke">${escapeXml(getCityLabel(city))}</text>`;
+            return `<text x="${metric.x}" y="${metric.y}" text-anchor="middle" dominant-baseline="central" font-family="Arial,'Noto Sans SC',sans-serif" font-size="11" font-weight="700" fill="#242824" stroke="#fffdf8" stroke-width="2.6" paint-order="stroke">${escapeXml(cityLabel(city))}</text>`;
           })
           .join("")
         : "";
       const legend = levels
         .map((level, index) => {
           const y = 376 + index * 92;
-          return `<rect x="1300" y="${y}" width="46" height="46" rx="10" fill="${level.color}"/><text x="1370" y="${y + 20}" font-size="25" font-weight="700" fill="#252824">${level.label}</text><text x="1370" y="${y + 48}" font-size="18" fill="#74766f">${level.english} · ${level.value}分</text>`;
+          const copy = localizedLevels[level.value];
+          const pointText = locale === "en"
+            ? `${level.value} ${t.exportPointSuffix}`
+            : `${level.value}${t.exportPointSuffix}`;
+          return `<rect x="1300" y="${y}" width="46" height="46" rx="10" fill="${level.color}"/><text x="1370" y="${y + 20}" font-size="25" font-weight="700" fill="#252824">${escapeXml(copy.label)}</text><text x="1370" y="${y + 48}" font-size="18" fill="#74766f">${escapeXml(copy.detail)} · ${escapeXml(pointText)}</text>`;
         })
         .join("");
-      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><rect width="1800" height="1160" fill="#f4f0e7"/><text x="92" y="90" font-family="Arial,'Noto Sans SC',sans-serif" font-size="46" font-weight="800" fill="#20241f">我的中国足迹</text><text x="1300" y="110" font-family="Arial,'Noto Sans SC',sans-serif" font-size="24" fill="#74766f">VISITED CHINA</text><g transform="translate(70 168) scale(${mapScale})">${mapPaths}${exportLabels}</g><rect x="1258" y="168" width="470" height="824" rx="36" fill="#fffdf8" stroke="#dcd8cd" stroke-width="2"/><text x="1300" y="250" font-family="Arial,'Noto Sans SC',sans-serif" font-size="26" fill="#74766f">足迹总分</text><text x="1300" y="326" font-family="Arial,'Noto Sans SC',sans-serif" font-size="70" font-weight="800" fill="#c54034">${score}</text><text x="1470" y="320" font-family="Arial,'Noto Sans SC',sans-serif" font-size="24" fill="#74766f">${visitedCount} 座城市</text>${legend}<text x="92" y="1090" font-family="Arial,'Noto Sans SC',sans-serif" font-size="20" fill="#8d8e88">${escapeXml(EXPORT_SITE_ADDRESS)}</text></svg>`;
+      const exportCityCount = `${visitedCount} ${t.exportCitySuffix}`;
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><rect width="1800" height="1160" fill="#f4f0e7"/><text x="92" y="90" font-family="Arial,'Noto Sans SC',sans-serif" font-size="46" font-weight="800" fill="#20241f">${escapeXml(t.exportTitle)}</text><text x="1300" y="110" font-family="Arial,'Noto Sans SC',sans-serif" font-size="24" fill="#74766f">${escapeXml(t.exportSubtitle)}</text><g transform="translate(70 168) scale(${mapScale})">${mapPaths}${exportLabels}</g><rect x="1258" y="168" width="470" height="824" rx="36" fill="#fffdf8" stroke="#dcd8cd" stroke-width="2"/><text x="1300" y="250" font-family="Arial,'Noto Sans SC',sans-serif" font-size="26" fill="#74766f">${escapeXml(t.exportScore)}</text><text x="1300" y="326" font-family="Arial,'Noto Sans SC',sans-serif" font-size="70" font-weight="800" fill="#c54034">${score}</text><text x="1470" y="320" font-family="Arial,'Noto Sans SC',sans-serif" font-size="24" fill="#74766f">${escapeXml(exportCityCount)}</text>${legend}<text x="92" y="1090" font-family="Arial,'Noto Sans SC',sans-serif" font-size="20" fill="#8d8e88">${escapeXml(EXPORT_SITE_ADDRESS)}</text></svg>`;
       const blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
       const url = URL.createObjectURL(blob);
       const image = new Image();
@@ -545,7 +585,7 @@ export default function Home() {
       const downloadUrl = URL.createObjectURL(png);
       const anchor = document.createElement("a");
       anchor.href = downloadUrl;
-      anchor.download = "visited-china-map.png";
+      anchor.download = t.exportFilename;
       anchor.click();
       URL.revokeObjectURL(downloadUrl);
     } finally {
@@ -556,11 +596,11 @@ export default function Home() {
   return (
     <main className="app-shell">
       <header className="topbar">
-        <a className="brand" href="#" aria-label="Visited China home">
+        <a className="brand" href="#" aria-label={t.homeAria}>
           <span className="brand-mark">中</span>
           <span>
-            <strong>我的中国足迹</strong>
-            <small>VISITED CHINA</small>
+            <strong>{t.brandTitle}</strong>
+            <small>{t.brandSubtitle}</small>
           </span>
         </a>
 
@@ -578,15 +618,15 @@ export default function Home() {
               if (event.key === "Enter" && suggestions[0]) focusCity(suggestions[0]);
               if (event.key === "Escape") setSearchOpen(false);
             }}
-            placeholder="搜索城市，例如：成都"
-            aria-label="Search a city"
+            placeholder={t.searchPlaceholder}
+            aria-label={t.searchAria}
             role="combobox"
             aria-autocomplete="list"
             aria-controls="city-suggestions"
             aria-expanded={searchOpen && suggestions.length > 0}
           />
           {search && (
-            <button className="search-clear" onClick={() => setSearch("")} aria-label="Clear search">
+            <button className="search-clear" onClick={() => setSearch("")} aria-label={t.clearSearch}>
               ×
             </button>
           )}
@@ -594,18 +634,39 @@ export default function Home() {
             <div id="city-suggestions" className="suggestions" role="listbox">
               {suggestions.map((city) => (
                 <button key={city} onClick={() => focusCity(city)} role="option" aria-selected="false">
-                  <span>{city}</span>
-                  <small>{chinaMap[city].name}</small>
+                  <span>{cityLabel(city)}</span>
+                  <small>{locale === "en" ? t.cityResultType : chinaMap[city].name}</small>
                 </button>
               ))}
             </div>
           )}
         </div>
 
-        <button className="export-button" onClick={exportMap} disabled={isExporting}>
-          <DownloadIcon />
-          <span>{isExporting ? "正在生成…" : "保存完整地图"}</span>
-        </button>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 8 }}>
+          <button
+            onClick={() => setLocale((current) => current === "zh-CN" ? "en" : "zh-CN")}
+            aria-label={t.languageAria}
+            title={t.languageAria}
+            style={{
+              minWidth: 42,
+              height: 42,
+              padding: "0 10px",
+              border: "1px solid var(--line)",
+              borderRadius: 12,
+              background: "var(--surface)",
+              color: "var(--ink)",
+              fontWeight: 800,
+              cursor: "pointer",
+              flex: "0 0 auto",
+            }}
+          >
+            {t.languageButton}
+          </button>
+          <button className="export-button" onClick={exportMap} disabled={isExporting}>
+            <DownloadIcon />
+            <span>{isExporting ? t.generating : t.saveMap}</span>
+          </button>
+        </div>
       </header>
 
       <section className="workspace">
@@ -624,9 +685,9 @@ export default function Home() {
           }}
         >
           <div className="map-caption">
-            <span className="eyebrow">点击一座城市开始</span>
-            <h1>你在中国，留下了多少足迹？</h1>
-            <p>点选城市标记足迹等级，拖动地图或双指缩放探索。</p>
+            <span className="eyebrow">{t.captionEyebrow}</span>
+            <h1>{t.captionTitle}</h1>
+            <p>{t.captionBody}</p>
           </div>
 
           <svg
@@ -634,7 +695,7 @@ export default function Home() {
             className="china-map"
             viewBox={`0 0 ${VIEWBOX.width} ${VIEWBOX.height}`}
             role="img"
-            aria-label="Interactive map of cities in China"
+            aria-label={t.mapAria}
             onWheel={handleWheel}
           >
             <g transform={`translate(${pan.x} ${pan.y}) scale(${zoom})`}>
@@ -653,7 +714,7 @@ export default function Home() {
                     className={`city-path${selected ? " is-selected" : ""}`}
                     vectorEffect="non-scaling-stroke"
                     tabIndex={0}
-                    aria-label={`${chinaMap[city].name}, ${levels.find((item) => item.value === level)?.label}`}
+                    aria-label={`${cityTitle(city)}, ${localizedLevels[level].label}`}
                     onPointerEnter={(event) => updateHoverTooltip(city, event)}
                     onPointerMove={(event) => updateHoverTooltip(city, event)}
                     onPointerLeave={() => setHoveredCity((current) => current === city ? null : current)}
@@ -694,7 +755,7 @@ export default function Home() {
                       setSelectedCity(city);
                     }}
                   >
-                    {getCityLabel(city)}
+                    {cityLabel(city)}
                   </text>
                 );
               })}
@@ -707,7 +768,7 @@ export default function Home() {
               style={{ left: hoverPoint.x, top: hoverPoint.y }}
               aria-hidden="true"
             >
-              {chinaMap[hoveredCity].name}
+              {cityTitle(hoveredCity)}
             </div>
           )}
 
@@ -716,13 +777,13 @@ export default function Home() {
             onClick={() => setShowLabels((current) => !current)}
             aria-pressed={showLabels}
           >
-            城市名 <span>{showLabels ? "开" : "关"}</span>
+            {t.cityNames} <span>{showLabels ? t.on : t.off}</span>
           </button>
 
-          <div className="zoom-controls" aria-label="Map zoom controls">
-            <button onClick={() => zoomAt(zoom * 1.3)} aria-label="Zoom in">+</button>
-            <button onClick={() => zoomAt(zoom / 1.3)} aria-label="Zoom out">−</button>
-            <button onClick={resetView} aria-label="Reset map view" className="locate-button">
+          <div className="zoom-controls" aria-label={t.zoomControls}>
+            <button onClick={() => zoomAt(zoom * 1.3)} aria-label={t.zoomIn}>+</button>
+            <button onClick={() => zoomAt(zoom / 1.3)} aria-label={t.zoomOut}>−</button>
+            <button onClick={resetView} aria-label={t.resetView} className="locate-button">
               <LocateIcon />
             </button>
           </div>
@@ -733,30 +794,33 @@ export default function Home() {
             <aside
               className="city-popover"
               style={{ left: popover.x, top: popover.y }}
-              aria-label={`Set visit level for ${selectedCity}`}
+              aria-label={`${t.chooseLevel}: ${cityTitle(selectedCity)}`}
             >
               <div className="popover-heading">
                 <div>
-                  <span>选择足迹等级</span>
-                  <h2>{chinaMap[selectedCity].name}</h2>
+                  <span>{t.chooseLevel}</span>
+                  <h2>{cityTitle(selectedCity)}</h2>
                 </div>
-                <button onClick={() => setSelectedCity(null)} aria-label="Close">×</button>
+                <button onClick={() => setSelectedCity(null)} aria-label={t.close}>×</button>
               </div>
               <div className="level-options">
-                {levels.map((level) => (
-                  <button
-                    key={level.value}
-                    className={(visits[selectedCity] ?? 0) === level.value ? "active" : ""}
-                    onClick={() => chooseLevel(level.value)}
-                  >
-                    <span className="level-dot" style={{ background: level.color }} />
-                    <span className="level-copy">
-                      <strong>{level.label}</strong>
-                      <small>{level.english}</small>
-                    </span>
-                    <span className="level-score">+{level.value}</span>
-                  </button>
-                ))}
+                {levels.map((level) => {
+                  const copy = localizedLevels[level.value];
+                  return (
+                    <button
+                      key={level.value}
+                      className={(visits[selectedCity] ?? 0) === level.value ? "active" : ""}
+                      onClick={() => chooseLevel(level.value)}
+                    >
+                      <span className="level-dot" style={{ background: level.color }} />
+                      <span className="level-copy">
+                        <strong>{copy.label}</strong>
+                        <small>{copy.detail}</small>
+                      </span>
+                      <span className="level-score">+{level.value}</span>
+                    </button>
+                  );
+                })}
               </div>
             </aside>
           )}
@@ -764,12 +828,12 @@ export default function Home() {
 
         <aside className="side-panel">
           <section className="score-card">
-            <span className="eyebrow">YOUR FOOTPRINT</span>
+            <span className="eyebrow">{t.footprintEyebrow}</span>
             <div className="score-row">
               <strong>{score}</strong>
-              <span>分</span>
+              <span>{t.points}</span>
             </div>
-            <p>已标记 <b>{visitedCount}</b> / {cityNames.length} 座城市</p>
+            <p>{t.marked} <b>{visitedCount}</b> / {cityNames.length} {t.cities}</p>
             <div className="score-track">
               <span style={{ width: `${Math.min(100, (visitedCount / cityNames.length) * 100)}%` }} />
             </div>
@@ -778,30 +842,33 @@ export default function Home() {
               onClick={clearAllMarks}
               disabled={Object.keys(visits).length === 0}
             >
-              清除全部标记
+              {t.clearAll}
             </button>
           </section>
 
           <section className="legend-card">
             <div className="section-heading">
-              <h2>足迹图例</h2>
-              <span>每座城市计分</span>
+              <h2>{t.legendTitle}</h2>
+              <span>{t.legendSubtitle}</span>
             </div>
             <div className="legend-list">
-              {levels.map((level) => (
-                <div className="legend-item" key={level.value}>
-                  <span className="legend-swatch" style={{ background: level.color }} />
-                  <span>
-                    <strong>{level.label}</strong>
-                    <small>{level.english}</small>
-                  </span>
-                  <b>{level.value}</b>
-                </div>
-              ))}
+              {levels.map((level) => {
+                const copy = localizedLevels[level.value];
+                return (
+                  <div className="legend-item" key={level.value}>
+                    <span className="legend-swatch" style={{ background: level.color }} />
+                    <span>
+                      <strong>{copy.label}</strong>
+                      <small>{copy.detail}</small>
+                    </span>
+                    <b>{level.value}</b>
+                  </div>
+                );
+              })}
             </div>
           </section>
 
-          <p className="privacy-note">你的标记仅保存在当前设备。导出的图片始终包含完整地图与图例，不受当前缩放影响。</p>
+          <p className="privacy-note">{t.privacy}</p>
         </aside>
       </section>
     </main>
