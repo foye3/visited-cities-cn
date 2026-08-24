@@ -21,7 +21,7 @@ Avoid deriving English names mechanically from pinyin when an established Englis
 
 ## Map interaction or responsive UI changes
 
-The map uses Pointer Events rather than separate mouse/touch implementations, with special handling for device differences. Before simplifying a handler, preserve the behavior that motivated it.
+The map uses Pointer Events rather than separate mouse/touch implementations, with special handling for device differences. The max-zoom branch uses `window.matchMedia("(pointer: coarse)")`, so it follows the device's primary-pointer media query rather than the `pointerType` of an individual event. Before simplifying a handler, preserve the behavior that motivated it.
 
 Check these scenarios after a change:
 
@@ -68,12 +68,14 @@ When changing export behavior, verify:
 
 ## GitHub Pages, base-path, or workflow changes
 
-There are two distinct trust zones:
+There are two distinct GitHub Actions trust zones:
 
-1. `.github/workflows/pr-preview.yml` runs PR code with read-only repository permissions, validates it, and uploads static artifacts.
-2. `.github/workflows/publish-pr-preview.yml` is triggered from the completed validation run, checks out trusted `main`, downloads the static preview artifact, validates its shape/size, writes it into generated `pages-content`, deploys combined production + active previews, and posts the PR preview URL.
+1. `.github/workflows/pr-preview.yml` runs PR source/build code with read-only repository permissions, validates it, and uploads static artifacts.
+2. `.github/workflows/publish-pr-preview.yml` is triggered from the completed validation run, checks out trusted `main`, downloads the static preview artifact, validates its shape/size, writes it into generated `pages-content`, deploys combined production + active previews, and posts the PR preview URL. It must not execute PR scripts or source code.
 
-Do not collapse those zones by checking out or executing the PR branch in the privileged publisher.
+Do not collapse those Actions trust zones by checking out or executing the PR branch in the privileged publisher.
+
+The published preview is not a browser sandbox: opening it executes the compiled PR client-side JavaScript. Production and PR previews are different paths on the same `foye3.github.io` origin, so origin-scoped browser state such as `localStorage` is shared between them. Keep that distinction in mind when reasoning about preview safety or adding browser-side persistence.
 
 Production `.github/workflows/deploy-pages.yml` builds `main`, refreshes `pages-content/production`, preserves active `pages-content/preview/*`, assembles the combined site, and deploys it. Preview cleanup is handled separately when PRs close.
 
