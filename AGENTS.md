@@ -37,7 +37,7 @@ Use this file as the shortest reliable path into the repository. Keep `README.md
 
 ### Map interaction
 
-- Desktop and touch intentionally differ: desktop max zoom is 6; coarse-pointer/touch max zoom is 18.
+- Devices whose primary pointer matches `(pointer: coarse)` use max zoom 18; other devices use max zoom 6. This is a device/media-query rule, not the `PointerEvent.pointerType` of a particular interaction.
 - Click/tap selection must remain distinct from drag/pinch. The pointer handlers include movement thresholds, mouse-click suppression after dragging, and a short level-choice guard to absorb mobile synthetic clicks.
 - Touch selection can fall back to the nearest city bounds so tiny regions remain usable.
 - City paths remain keyboard-selectable. Visible SVG text labels are clickable but deliberately **not** native focus targets; adding `tabIndex`/button semantics to the labels previously produced unwanted browser focus artifacts.
@@ -64,12 +64,13 @@ Use this file as the shortest reliable path into the repository. Keep `README.md
 
 - `next.config.ts` always uses `output: "export"`, `trailingSlash: true`, and `PAGES_BASE_PATH` for production or PR-preview subpaths. Avoid root-absolute asset assumptions.
 - `main` is production source. `pages-content` is generated deployment state only; never develop application changes there.
-- PR code executes only in the read-only `pr-preview.yml` workflow. The privileged `publish-pr-preview.yml` checks out trusted `main` and consumes the resulting **static artifact**; it must not execute or source PR code.
+- PR source/build code executes in GitHub Actions only inside the read-only `pr-preview.yml` workflow. The privileged `publish-pr-preview.yml` checks out trusted `main`, validates the resulting **static artifact**, and deploys it; it must not execute PR scripts or source code.
+- Opening a published PR preview still executes the compiled PR client-side JavaScript in the browser. Production and previews share the same GitHub Pages origin, so origin-scoped browser state such as `localStorage` is shared across their different paths; do not treat a preview as a browser-storage sandbox.
 - Production and PR previews share the `pages-publish` concurrency group so deployment-state writes remain serialized.
 
 ## Validation
 
-Use Node.js 22 and npm.
+Use Node.js >=22.13.0 and npm; CI uses Node 22.x.
 
 ```bash
 npm ci
